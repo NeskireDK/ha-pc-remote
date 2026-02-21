@@ -1,4 +1,4 @@
-"""Binary sensor platform for the Windows Remote integration."""
+"""Binary sensor platform for the PC Remote integration."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_HOST, DOMAIN
-from .coordinator import WindowsRemoteCoordinator
+from .coordinator import PcRemoteCoordinator
 
 
 async def async_setup_entry(
@@ -21,14 +21,14 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the binary sensor platform."""
-    coordinator: WindowsRemoteCoordinator = hass.data[DOMAIN][entry.entry_id][
+    coordinator: PcRemoteCoordinator = hass.data[DOMAIN][entry.entry_id][
         "coordinator"
     ]
-    async_add_entities([WindowsRemoteOnlineSensor(coordinator, entry)])
+    async_add_entities([PcRemoteOnlineSensor(coordinator, entry)])
 
 
-class WindowsRemoteOnlineSensor(
-    CoordinatorEntity[WindowsRemoteCoordinator], BinarySensorEntity
+class PcRemoteOnlineSensor(
+    CoordinatorEntity[PcRemoteCoordinator], BinarySensorEntity
 ):
     """Binary sensor indicating whether the Windows PC is online."""
 
@@ -38,7 +38,7 @@ class WindowsRemoteOnlineSensor(
 
     def __init__(
         self,
-        coordinator: WindowsRemoteCoordinator,
+        coordinator: PcRemoteCoordinator,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the binary sensor."""
@@ -46,11 +46,16 @@ class WindowsRemoteOnlineSensor(
         self._attr_unique_id = f"{entry.entry_id}_online"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"Windows Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "Windows Remote",
+            "name": f"PC Remote ({entry.data[CONF_HOST]})",
+            "manufacturer": "PC Remote",
             "model": "PC",
             "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
         }
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on online state."""
+        return "mdi:desktop-classic" if self.is_on else "mdi:desktop-classic-off"
 
     @property
     def is_on(self) -> bool | None:

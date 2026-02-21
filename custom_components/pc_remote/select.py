@@ -1,4 +1,4 @@
-"""Select platform for the Windows Remote integration."""
+"""Select platform for the PC Remote integration."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import WindowsRemoteClient
+from .api import PcRemoteClient
 from .const import CONF_HOST, DOMAIN
-from .coordinator import WindowsRemoteCoordinator
+from .coordinator import PcRemoteCoordinator
 
 
 async def async_setup_entry(
@@ -20,27 +20,28 @@ async def async_setup_entry(
 ) -> None:
     """Set up the select platform."""
     data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: WindowsRemoteCoordinator = data["coordinator"]
-    client: WindowsRemoteClient = data["client"]
+    coordinator: PcRemoteCoordinator = data["coordinator"]
+    client: PcRemoteClient = data["client"]
     async_add_entities([
-        WindowsRemoteAudioOutputSelect(coordinator, client, entry),
-        WindowsRemoteMonitorProfileSelect(coordinator, client, entry),
-        WindowsRemoteMonitorSoloSelect(coordinator, client, entry),
+        PcRemoteAudioOutputSelect(coordinator, client, entry),
+        PcRemoteMonitorProfileSelect(coordinator, client, entry),
+        PcRemoteMonitorSoloSelect(coordinator, client, entry),
     ])
 
 
-class WindowsRemoteAudioOutputSelect(
-    CoordinatorEntity[WindowsRemoteCoordinator], SelectEntity
+class PcRemoteAudioOutputSelect(
+    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
 ):
     """Select entity for choosing the active audio output device."""
 
     _attr_has_entity_name = True
     _attr_name = "Audio Output"
+    _attr_icon = "mdi:speaker"
 
     def __init__(
         self,
-        coordinator: WindowsRemoteCoordinator,
-        client: WindowsRemoteClient,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the select entity."""
@@ -49,8 +50,8 @@ class WindowsRemoteAudioOutputSelect(
         self._attr_unique_id = f"{entry.entry_id}_audio_output"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"Windows Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "Windows Remote",
+            "name": f"PC Remote ({entry.data[CONF_HOST]})",
+            "manufacturer": "PC Remote",
             "model": "PC",
             "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
         }
@@ -71,18 +72,19 @@ class WindowsRemoteAudioOutputSelect(
         await self.coordinator.async_request_refresh()
 
 
-class WindowsRemoteMonitorProfileSelect(
-    CoordinatorEntity[WindowsRemoteCoordinator], SelectEntity
+class PcRemoteMonitorProfileSelect(
+    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
 ):
     """Select entity for choosing a monitor profile."""
 
     _attr_has_entity_name = True
     _attr_name = "Monitor Profile"
+    _attr_icon = "mdi:monitor-shimmer"
 
     def __init__(
         self,
-        coordinator: WindowsRemoteCoordinator,
-        client: WindowsRemoteClient,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the select entity."""
@@ -91,8 +93,8 @@ class WindowsRemoteMonitorProfileSelect(
         self._attr_unique_id = f"{entry.entry_id}_monitor_profile"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"Windows Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "Windows Remote",
+            "name": f"PC Remote ({entry.data[CONF_HOST]})",
+            "manufacturer": "PC Remote",
             "model": "PC",
             "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
         }
@@ -113,18 +115,19 @@ class WindowsRemoteMonitorProfileSelect(
         await self.coordinator.async_request_refresh()
 
 
-class WindowsRemoteMonitorSoloSelect(
-    CoordinatorEntity[WindowsRemoteCoordinator], SelectEntity
+class PcRemoteMonitorSoloSelect(
+    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
 ):
     """Select entity for choosing the sole active monitor."""
 
     _attr_has_entity_name = True
     _attr_name = "Active Monitor"
+    _attr_icon = "mdi:monitor"
 
     def __init__(
         self,
-        coordinator: WindowsRemoteCoordinator,
-        client: WindowsRemoteClient,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the select entity."""
@@ -133,8 +136,8 @@ class WindowsRemoteMonitorSoloSelect(
         self._attr_unique_id = f"{entry.entry_id}_monitor_solo"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"Windows Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "Windows Remote",
+            "name": f"PC Remote ({entry.data[CONF_HOST]})",
+            "manufacturer": "PC Remote",
             "model": "PC",
             "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
         }

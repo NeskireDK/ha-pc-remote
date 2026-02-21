@@ -1,4 +1,4 @@
-"""Button platform for the Windows Remote integration."""
+"""Button platform for the PC Remote integration."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import WindowsRemoteClient
+from .api import PcRemoteClient
 from .const import CONF_HOST, DOMAIN
-from .coordinator import WindowsRemoteCoordinator
+from .coordinator import PcRemoteCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,23 +24,24 @@ async def async_setup_entry(
 ) -> None:
     """Set up the button platform."""
     data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: WindowsRemoteCoordinator = data["coordinator"]
-    client: WindowsRemoteClient = data["client"]
-    async_add_entities([WindowsRemoteSleepButton(coordinator, client, entry)])
+    coordinator: PcRemoteCoordinator = data["coordinator"]
+    client: PcRemoteClient = data["client"]
+    async_add_entities([PcRemoteSleepButton(coordinator, client, entry)])
 
 
-class WindowsRemoteSleepButton(
-    CoordinatorEntity[WindowsRemoteCoordinator], ButtonEntity
+class PcRemoteSleepButton(
+    CoordinatorEntity[PcRemoteCoordinator], ButtonEntity
 ):
     """Button that puts the Windows PC to sleep."""
 
     _attr_has_entity_name = True
     _attr_name = "Sleep"
+    _attr_icon = "mdi:power-sleep"
 
     def __init__(
         self,
-        coordinator: WindowsRemoteCoordinator,
-        client: WindowsRemoteClient,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the button."""
@@ -49,8 +50,8 @@ class WindowsRemoteSleepButton(
         self._attr_unique_id = f"{entry.entry_id}_sleep"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"Windows Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "Windows Remote",
+            "name": f"PC Remote ({entry.data[CONF_HOST]})",
+            "manufacturer": "PC Remote",
             "model": "PC",
             "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
         }

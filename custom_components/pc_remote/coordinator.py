@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for the Windows Remote integration."""
+"""DataUpdateCoordinator for the PC Remote integration."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import CannotConnectError, InvalidAuthError, WindowsRemoteClient
+from .api import CannotConnectError, InvalidAuthError, PcRemoteClient
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class WindowsRemoteData:
+class PcRemoteData:
     """Data returned by the coordinator."""
 
     online: bool = False
@@ -28,13 +28,13 @@ class WindowsRemoteData:
     apps: list[dict] = field(default_factory=list)
 
 
-class WindowsRemoteCoordinator(DataUpdateCoordinator[WindowsRemoteData]):
-    """Coordinator that polls the Windows Remote service."""
+class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
+    """Coordinator that polls the PC Remote service."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        client: WindowsRemoteClient,
+        client: PcRemoteClient,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -45,9 +45,9 @@ class WindowsRemoteCoordinator(DataUpdateCoordinator[WindowsRemoteData]):
         )
         self.client = client
 
-    async def _async_update_data(self) -> WindowsRemoteData:
-        """Fetch data from the Windows Remote service."""
-        data = WindowsRemoteData()
+    async def _async_update_data(self) -> PcRemoteData:
+        """Fetch data from the PC Remote service."""
+        data = PcRemoteData()
 
         # Check health first
         try:

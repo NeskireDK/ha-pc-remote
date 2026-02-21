@@ -1,6 +1,6 @@
-"""Constants for the Windows Remote integration."""
+"""Constants for the PC Remote integration."""
 
-DOMAIN = "windows_remote"
+DOMAIN = "pc_remote"
 
 CONF_HOST = "host"
 CONF_PORT = "port"

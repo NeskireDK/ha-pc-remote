@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Windows Remote",
-        "description": "Enter the connection details for your Windows PC running the Windows Remote service.",
+        "title": "Connect to PC Remote",
+        "description": "Enter the connection details for your PC running the PC Remote service.",
         "data": {
           "host": "Host",
           "port": "Port",
@@ -11,8 +11,8 @@
         }
       },
       "zeroconf_confirm": {
-        "title": "Windows Remote discovered",
-        "description": "A Windows Remote service was found at {host}:{port}. Enter the API key to connect.",
+        "title": "PC Remote discovered",
+        "description": "A PC Remote service was found at {host}:{port}. Enter the API key to connect.",
         "data": {
           "api_key": "API Key"
         }

@@ -1,4 +1,4 @@
-"""API client for the Windows Remote service."""
+"""API client for the PC Remote service."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import aiohttp
 _LOGGER = logging.getLogger(__name__)
 
 
-class WindowsRemoteClient:
-    """Async HTTP client for the Windows Remote REST API."""
+class PcRemoteClient:
+    """Async HTTP client for the PC Remote REST API."""
 
     def __init__(
         self,
@@ -311,7 +311,7 @@ class WindowsRemoteClient:
     # ------------------------------------------------------------------
 
     async def test_connection(self) -> bool:
-        """Test the connection to the Windows Remote service."""
+        """Test the connection to the PC Remote service."""
         await self.get_health()
         return True
 

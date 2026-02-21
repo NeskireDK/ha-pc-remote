@@ -1,12 +1,12 @@
-# ha-windows-remote
+# ha-pc-remote
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
-Home Assistant custom integration for controlling a Windows PC via [ha-windows-remote-service](https://github.com/NeskireDK/ha-windows-remote-service).
+Home Assistant custom integration for controlling a Windows PC via [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service).
 
 ## Requirements
 
-- [ha-windows-remote-service](https://github.com/NeskireDK/ha-windows-remote-service) running on the target Windows PC
+- [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service) running on the target Windows PC
 - Home Assistant 2024.1.0+
 
 ## Installation
@@ -14,13 +14,13 @@ Home Assistant custom integration for controlling a Windows PC via [ha-windows-r
 ### HACS (Recommended)
 
 1. Add this repository as a custom repository in HACS
-2. Install "Windows Remote"
+2. Install "PC Remote"
 3. Restart Home Assistant
-4. Go to Settings > Integrations > Add > Windows Remote
+4. Go to Settings > Integrations > Add > PC Remote
 
 ### Manual
 
-Copy `custom_components/windows_remote/` to your Home Assistant `custom_components/` directory.
+Copy `custom_components/pc_remote/` to your Home Assistant `custom_components/` directory.
 
 ## Setup
 

@@ -1,4 +1,4 @@
-"""Switch platform for the Windows Remote integration."""
+"""Switch platform for the PC Remote integration."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import WindowsRemoteClient
+from .api import PcRemoteClient
 from .const import CONF_HOST, DOMAIN
-from .coordinator import WindowsRemoteCoordinator
+from .coordinator import PcRemoteCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,27 +25,28 @@ async def async_setup_entry(
 ) -> None:
     """Set up the switch platform."""
     data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: WindowsRemoteCoordinator = data["coordinator"]
-    client: WindowsRemoteClient = data["client"]
+    coordinator: PcRemoteCoordinator = data["coordinator"]
+    client: PcRemoteClient = data["client"]
 
     entities = [
-        WindowsRemoteAppSwitch(coordinator, client, entry, app["key"], app["displayName"])
+        PcRemoteAppSwitch(coordinator, client, entry, app["key"], app["displayName"])
         for app in coordinator.data.apps
     ]
     async_add_entities(entities)
 
 
-class WindowsRemoteAppSwitch(
-    CoordinatorEntity[WindowsRemoteCoordinator], SwitchEntity
+class PcRemoteAppSwitch(
+    CoordinatorEntity[PcRemoteCoordinator], SwitchEntity
 ):
     """Switch that launches or kills an app on the Windows PC."""
 
     _attr_has_entity_name = True
+    _attr_icon = "mdi:application"
 
     def __init__(
         self,
-        coordinator: WindowsRemoteCoordinator,
-        client: WindowsRemoteClient,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
         entry: ConfigEntry,
         app_key: str,
         display_name: str,
@@ -58,8 +59,8 @@ class WindowsRemoteAppSwitch(
         self._attr_unique_id = f"{entry.entry_id}_app_{app_key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"Windows Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "Windows Remote",
+            "name": f"PC Remote ({entry.data[CONF_HOST]})",
+            "manufacturer": "PC Remote",
             "model": "PC",
             "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
         }

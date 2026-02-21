@@ -1,4 +1,4 @@
-"""Config flow for the Windows Remote integration."""
+"""Config flow for the PC Remote integration."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import CannotConnectError, InvalidAuthError, WindowsRemoteClient
+from .api import CannotConnectError, InvalidAuthError, PcRemoteClient
 from .const import CONF_API_KEY, CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,8 +31,8 @@ STEP_ZEROCONF_CONFIRM_SCHEMA = vol.Schema(
 )
 
 
-class WindowsRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Windows Remote."""
+class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for PC Remote."""
 
     VERSION = 1
 
@@ -53,7 +53,7 @@ class WindowsRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
             session = async_get_clientsession(self.hass)
-            client = WindowsRemoteClient(
+            client = PcRemoteClient(
                 host=user_input[CONF_HOST],
                 port=user_input[CONF_PORT],
                 api_key=user_input[CONF_API_KEY],
@@ -71,7 +71,7 @@ class WindowsRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(
-                    title=f"Windows Remote ({user_input[CONF_HOST]})",
+                    title=f"PC Remote ({user_input[CONF_HOST]})",
                     data=user_input,
                 )
 
@@ -120,7 +120,7 @@ class WindowsRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
             assert self._discovered_port is not None
 
             session = async_get_clientsession(self.hass)
-            client = WindowsRemoteClient(
+            client = PcRemoteClient(
                 host=self._discovered_host,
                 port=self._discovered_port,
                 api_key=user_input[CONF_API_KEY],
@@ -138,7 +138,7 @@ class WindowsRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(
-                    title=f"Windows Remote ({self._discovered_host})",
+                    title=f"PC Remote ({self._discovered_host})",
                     data={
                         CONF_HOST: self._discovered_host,
                         CONF_PORT: self._discovered_port,

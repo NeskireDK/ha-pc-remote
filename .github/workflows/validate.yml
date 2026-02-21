@@ -24,4 +24,4 @@ jobs:
         run: ruff check custom_components/
 
       - name: Check manifest
-        run: python -c "import json; m = json.load(open('custom_components/windows_remote/manifest.json')); assert m['domain'] == 'windows_remote'"
+        run: python -c "import json; m = json.load(open('custom_components/pc_remote/manifest.json')); assert m['domain'] == 'pc_remote'"
