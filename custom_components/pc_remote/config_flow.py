@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -24,17 +25,23 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+MAC_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_API_KEY): str,
+        vol.Required(CONF_API_KEY): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+        ),
     }
 )
 
 STEP_ZEROCONF_CONFIRM_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_API_KEY): str,
+        vol.Required(CONF_API_KEY): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+        ),
     }
 )
 
@@ -51,7 +58,7 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         self._host: str | None = None
         self._port: int | None = None
         self._api_key: str | None = None
-        self._unique_id: str | None = None
+        self._machine_name: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -60,16 +67,6 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(
-                f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
-            )
-            self._abort_if_unique_id_configured(
-                updates={
-                    CONF_HOST: user_input[CONF_HOST],
-                    CONF_PORT: user_input[CONF_PORT],
-                }
-            )
-
             session = async_get_clientsession(self.hass)
             client = PcRemoteClient(
                 host=user_input[CONF_HOST],
@@ -79,7 +76,7 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
             try:
-                await client.test_connection()
+                health = await client.get_health()
             except CannotConnectError:
                 errors["base"] = "cannot_connect"
             except InvalidAuthError:
@@ -88,9 +85,20 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during config flow")
                 errors["base"] = "unknown"
             else:
+                machine_name = health.get(
+                    "machineName", f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
+                )
+                await self.async_set_unique_id(machine_name)
+                self._abort_if_unique_id_configured(
+                    updates={
+                        CONF_HOST: user_input[CONF_HOST],
+                        CONF_PORT: user_input[CONF_PORT],
+                    }
+                )
                 self._host = user_input[CONF_HOST]
                 self._port = user_input[CONF_PORT]
                 self._api_key = user_input[CONF_API_KEY]
+                self._machine_name = machine_name
                 return await self.async_step_select_mac()
 
         return self.async_show_form(
@@ -104,13 +112,21 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle zeroconf discovery."""
         self._discovered_host = discovery_info.host
-        self._discovered_port = discovery_info.port or DEFAULT_PORT
+        port = discovery_info.port or DEFAULT_PORT
+        if not 1 <= port <= 65535:
+            return self.async_abort(reason="unknown")
+        self._discovered_port = port
 
         # Use machine_name from TXT record as stable unique ID (survives IP changes)
         machine_name = (discovery_info.properties or {}).get("machine_name")
         if machine_name:
             if isinstance(machine_name, bytes):
-                machine_name = machine_name.decode("utf-8")
+                try:
+                    machine_name = machine_name.decode("utf-8")
+                except UnicodeDecodeError:
+                    return self.async_abort(reason="unknown")
+            if len(machine_name) > 253:
+                machine_name = machine_name[:253]
             await self.async_set_unique_id(machine_name)
             self._abort_if_unique_id_configured(
                 updates={CONF_HOST: self._discovered_host, CONF_PORT: self._discovered_port}
@@ -134,8 +150,10 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            assert self._discovered_host is not None
-            assert self._discovered_port is not None
+            if self._discovered_host is None:
+                return self.async_abort(reason="unknown")
+            if self._discovered_port is None:
+                return self.async_abort(reason="unknown")
 
             session = async_get_clientsession(self.hass)
             client = PcRemoteClient(
@@ -190,7 +208,7 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
 
         try:
             health = await client.get_health()
-        except (CannotConnectError, InvalidAuthError, Exception):  # noqa: BLE001
+        except CannotConnectError:
             _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
             errors["base"] = "cannot_connect"
             return self.async_show_form(
@@ -198,8 +216,26 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 data_schema=vol.Schema({}),
                 errors=errors,
             )
+        except InvalidAuthError:
+            errors["base"] = "invalid_auth"
+            return self.async_show_form(
+                step_id="select_mac",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
+            errors["base"] = "unknown"
+            return self.async_show_form(
+                step_id="select_mac",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
 
-        mac_addresses: list[dict] = health.get("macAddresses", [])
+        raw_macs: list[dict] = health.get("macAddresses", [])
+        mac_addresses = [
+            m for m in raw_macs if MAC_PATTERN.match(m.get("macAddress", ""))
+        ]
 
         if not mac_addresses:
             errors["base"] = "no_mac_addresses"
@@ -215,8 +251,11 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         # Multiple MACs — show dropdown
         options = [
             selector.SelectOptionDict(
-                value=mac["macAddress"],
-                label=f"{mac['interfaceName']} ({mac['macAddress']} - {mac['ipAddress']})",
+                value=mac.get("macAddress", ""),
+                label=(
+                    f"{mac.get('interfaceName', '')} "
+                    f"({mac.get('macAddress', '')} - {mac.get('ipAddress', '')})"
+                ),
             )
             for mac in mac_addresses
         ]
