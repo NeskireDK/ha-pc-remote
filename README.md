@@ -20,10 +20,29 @@ Copy `custom_components/windows_remote/` to your Home Assistant `custom_componen
 
 ## Entities
 
-| Entity | Type | Description |
-|--------|------|-------------|
-| `binary_sensor.windows_remote_online` | Binary Sensor | PC online status |
-| `button.windows_remote_sleep` | Button | Suspend the PC |
+| Entity | Type | Description | Status |
+|--------|------|-------------|--------|
+| `binary_sensor.windows_remote_online` | Binary Sensor | PC online status | Done |
+| `button.windows_remote_sleep` | Button | Suspend the PC | Done |
+| `select.windows_remote_audio_output` | Select | Switch audio output device | Planned |
+| `number.windows_remote_volume` | Number | Master volume (0-100) | Planned |
+| `select.windows_remote_monitor_profile` | Select | Switch monitor profile | Planned |
+| `button.windows_remote_launch_{key}` | Button | Launch predefined app | Planned |
+| `binary_sensor.windows_remote_{key}` | Binary Sensor | App running status | Planned |
+
+## Roadmap
+
+- [x] Config flow (host, port, API key)
+- [x] Online binary sensor (health polling)
+- [x] Sleep button
+- [x] HACS-compliant structure
+- [x] GitHub Actions release
+- [ ] Audio output device selector
+- [ ] Volume control
+- [ ] Monitor profile selector
+- [ ] App launch buttons
+- [ ] App running sensors
+- [ ] mDNS/Zeroconf auto-discovery
 
 ## License
 
