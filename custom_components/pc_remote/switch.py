@@ -38,7 +38,7 @@ async def async_setup_entry(
 class PcRemoteAppSwitch(
     CoordinatorEntity[PcRemoteCoordinator], SwitchEntity
 ):
-    """Switch that launches or kills an app on the Windows PC."""
+    """Switch that launches or kills an app on the PC."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:application"

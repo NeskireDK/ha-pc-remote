@@ -30,7 +30,7 @@ async def async_setup_entry(
 class PcRemoteOnlineSensor(
     CoordinatorEntity[PcRemoteCoordinator], BinarySensorEntity
 ):
-    """Binary sensor indicating whether the Windows PC is online."""
+    """Binary sensor indicating whether the PC is online."""
 
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_has_entity_name = True

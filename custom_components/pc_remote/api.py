@@ -54,7 +54,7 @@ class PcRemoteClient:
     # ------------------------------------------------------------------
 
     async def sleep(self) -> None:
-        """Send the sleep command to the Windows PC."""
+        """Send the sleep command to the PC."""
         try:
             async with self._session.post(
                 f"{self._base_url}/api/system/sleep",

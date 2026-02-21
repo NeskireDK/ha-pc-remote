@@ -32,7 +32,7 @@ async def async_setup_entry(
 class PcRemoteSleepButton(
     CoordinatorEntity[PcRemoteCoordinator], ButtonEntity
 ):
-    """Button that puts the Windows PC to sleep."""
+    """Button that puts the PC to sleep."""
 
     _attr_has_entity_name = True
     _attr_name = "Sleep"
