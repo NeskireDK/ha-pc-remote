@@ -55,4 +55,4 @@ class WindowsRemoteOnlineSensor(
     @property
     def is_on(self) -> bool | None:
         """Return True if the PC is online."""
-        return self.coordinator.data
+        return self.coordinator.data.online

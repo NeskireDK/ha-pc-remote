@@ -24,11 +24,15 @@ class WindowsRemoteClient:
         self._headers = {"X-Api-Key": api_key}
         self._session = session
 
+    # ------------------------------------------------------------------
+    # Health
+    # ------------------------------------------------------------------
+
     async def get_health(self) -> dict:
         """Poll the health endpoint. Returns the JSON response."""
         try:
             async with self._session.get(
-                f"{self._base_url}/health",
+                f"{self._base_url}/api/health",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -41,11 +45,15 @@ class WindowsRemoteClient:
                 f"Cannot connect to {self._base_url}"
             ) from err
 
+    # ------------------------------------------------------------------
+    # System
+    # ------------------------------------------------------------------
+
     async def sleep(self) -> None:
         """Send the sleep command to the Windows PC."""
         try:
             async with self._session.post(
-                f"{self._base_url}/sleep",
+                f"{self._base_url}/api/system/sleep",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -56,6 +64,170 @@ class WindowsRemoteClient:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
             ) from err
+
+    # ------------------------------------------------------------------
+    # Audio
+    # ------------------------------------------------------------------
+
+    async def get_audio_devices(self) -> list[dict]:
+        """Get available audio output devices."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/audio/devices",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def get_current_audio(self) -> dict:
+        """Get the current audio device and volume."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/audio/current",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def set_audio_device(self, device_name: str) -> None:
+        """Set the active audio output device."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/audio/set/{device_name}",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def set_volume(self, level: int) -> None:
+        """Set the system volume level."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/audio/volume/{level}",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    # ------------------------------------------------------------------
+    # Monitor
+    # ------------------------------------------------------------------
+
+    async def get_monitor_profiles(self) -> list[dict]:
+        """Get available monitor profiles."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/monitor/profiles",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def set_monitor_profile(self, profile: str) -> None:
+        """Activate a monitor profile."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/monitor/set/{profile}",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    # ------------------------------------------------------------------
+    # Apps
+    # ------------------------------------------------------------------
+
+    async def get_apps(self) -> list[dict]:
+        """Get configured apps and their running status."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/app/status",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                return await resp.json()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def launch_app(self, app_key: str) -> None:
+        """Launch an app by key."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/app/launch/{app_key}",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def kill_app(self, app_key: str) -> None:
+        """Kill a running app by key."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/app/kill/{app_key}",
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    # ------------------------------------------------------------------
+    # Connection test
+    # ------------------------------------------------------------------
 
     async def test_connection(self) -> bool:
         """Test the connection to the Windows Remote service."""
