@@ -14,6 +14,7 @@ DOMAIN = "pc_remote"
 CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_API_KEY = "api_key"
+CONF_MAC_ADDRESS = "mac_address"
 
 DEFAULT_PORT = 5000
 DEFAULT_SCAN_INTERVAL = 30

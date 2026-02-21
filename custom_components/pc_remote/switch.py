@@ -5,14 +5,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.switch import SwitchEntity
+from wakeonlan import send_magic_packet
+
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import PcRemoteClient
-from .const import DOMAIN, build_device_info
+from .const import CONF_MAC_ADDRESS, DOMAIN, build_device_info
 from .coordinator import PcRemoteCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,11 +30,63 @@ async def async_setup_entry(
     coordinator: PcRemoteCoordinator = data["coordinator"]
     client: PcRemoteClient = data["client"]
 
-    entities = [
-        PcRemoteAppSwitch(coordinator, client, entry, app["key"], app["displayName"])
-        for app in coordinator.data.apps
-    ]
+    entities: list[SwitchEntity] = []
+
+    # Power switch (wake/sleep)
+    entities.append(PcRemotePowerSwitch(coordinator, client, entry))
+
+    # App switches
+    for app in coordinator.data.apps:
+        entities.append(
+            PcRemoteAppSwitch(
+                coordinator,
+                client,
+                entry,
+                app["key"],
+                app.get("displayName", app["key"]),
+            )
+        )
+
     async_add_entities(entities)
+
+
+class PcRemotePowerSwitch(
+    CoordinatorEntity[PcRemoteCoordinator], SwitchEntity
+):
+    """Switch that wakes or sleeps the PC."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "power"
+    _attr_icon = "mdi:power"
+    _attr_device_class = SwitchDeviceClass.SWITCH
+
+    def __init__(
+        self,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the power switch."""
+        super().__init__(coordinator)
+        self._client = client
+        self._mac = entry.data[CONF_MAC_ADDRESS]
+        self._attr_unique_id = f"{entry.entry_id}_power"
+        self._attr_device_info = build_device_info(entry)
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the PC is online."""
+        return self.coordinator.data.online
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Wake the PC via Wake-on-LAN."""
+        await self.hass.async_add_executor_job(send_magic_packet, self._mac)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Put the PC to sleep."""
+        await self._client.sleep()
+        await self.coordinator.async_request_refresh()
 
 
 class PcRemoteAppSwitch(

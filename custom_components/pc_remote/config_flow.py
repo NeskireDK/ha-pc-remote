@@ -9,10 +9,18 @@ import voluptuous as vol
 
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import CannotConnectError, InvalidAuthError, PcRemoteClient
-from .const import CONF_API_KEY, CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_API_KEY,
+    CONF_HOST,
+    CONF_MAC_ADDRESS,
+    CONF_PORT,
+    DEFAULT_PORT,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +48,10 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._discovered_host: str | None = None
         self._discovered_port: int | None = None
+        self._host: str | None = None
+        self._port: int | None = None
+        self._api_key: str | None = None
+        self._unique_id: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -76,10 +88,10 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during config flow")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(
-                    title=f"PC Remote ({user_input[CONF_HOST]})",
-                    data=user_input,
-                )
+                self._host = user_input[CONF_HOST]
+                self._port = user_input[CONF_PORT]
+                self._api_key = user_input[CONF_API_KEY]
+                return await self.async_step_select_mac()
 
         return self.async_show_form(
             step_id="user",
@@ -143,14 +155,10 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during config flow")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(
-                    title=f"PC Remote ({self._discovered_host})",
-                    data={
-                        CONF_HOST: self._discovered_host,
-                        CONF_PORT: self._discovered_port,
-                        CONF_API_KEY: user_input[CONF_API_KEY],
-                    },
-                )
+                self._host = self._discovered_host
+                self._port = self._discovered_port
+                self._api_key = user_input[CONF_API_KEY]
+                return await self.async_step_select_mac()
 
         return self.async_show_form(
             step_id="zeroconf_confirm",
@@ -160,4 +168,82 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 "port": str(self._discovered_port or DEFAULT_PORT),
             },
             errors=errors,
+        )
+
+    async def async_step_select_mac(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select a network interface for Wake-on-LAN."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            return self._create_entry(user_input[CONF_MAC_ADDRESS])
+
+        # Fetch MAC addresses from the health endpoint
+        session = async_get_clientsession(self.hass)
+        client = PcRemoteClient(
+            host=self._host,
+            port=self._port,
+            api_key=self._api_key,
+            session=session,
+        )
+
+        try:
+            health = await client.get_health()
+        except (CannotConnectError, InvalidAuthError, Exception):  # noqa: BLE001
+            _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
+            errors["base"] = "cannot_connect"
+            return self.async_show_form(
+                step_id="select_mac",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
+
+        mac_addresses: list[dict] = health.get("macAddresses", [])
+
+        if not mac_addresses:
+            errors["base"] = "no_mac_addresses"
+            return self.async_show_form(
+                step_id="select_mac",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
+
+        if len(mac_addresses) == 1:
+            return self._create_entry(mac_addresses[0]["macAddress"])
+
+        # Multiple MACs — show dropdown
+        options = [
+            selector.SelectOptionDict(
+                value=mac["macAddress"],
+                label=f"{mac['interfaceName']} ({mac['macAddress']} - {mac['ipAddress']})",
+            )
+            for mac in mac_addresses
+        ]
+
+        return self.async_show_form(
+            step_id="select_mac",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_MAC_ADDRESS): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    def _create_entry(self, mac_address: str) -> ConfigFlowResult:
+        """Create a config entry with the collected data."""
+        return self.async_create_entry(
+            title=f"PC Remote ({self._host})",
+            data={
+                CONF_HOST: self._host,
+                CONF_PORT: self._port,
+                CONF_API_KEY: self._api_key,
+                CONF_MAC_ADDRESS: mac_address,
+            },
         )

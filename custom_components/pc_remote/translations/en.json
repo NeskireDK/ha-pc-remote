@@ -1,4 +1,11 @@
 {
+  "entity": {
+    "switch": {
+      "power": {
+        "name": "Power"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -16,11 +23,19 @@
         "data": {
           "api_key": "API Key"
         }
+      },
+      "select_mac": {
+        "title": "Select Network Interface",
+        "description": "Select the network interface to use for Wake-on-LAN.",
+        "data": {
+          "mac_address": "Network interface"
+        }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect to the service. Check host and port.",
       "invalid_auth": "Invalid API key.",
+      "no_mac_addresses": "No network interfaces found. The service may need to be updated.",
       "unknown": "An unexpected error occurred."
     },
     "abort": {

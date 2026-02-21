@@ -12,7 +12,6 @@ from .const import CONF_API_KEY, CONF_HOST, CONF_PORT, DOMAIN
 from .coordinator import PcRemoteCoordinator
 
 PLATFORMS: list[Platform] = [
-    Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.NUMBER,
     Platform.SELECT,
