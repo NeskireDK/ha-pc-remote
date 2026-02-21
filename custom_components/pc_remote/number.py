@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import PcRemoteClient
-from .const import CONF_HOST, DOMAIN
+from .const import DOMAIN, build_device_info
 from .coordinator import PcRemoteCoordinator
 
 
@@ -47,13 +47,7 @@ class PcRemoteVolumeNumber(
         super().__init__(coordinator)
         self._client = client
         self._attr_unique_id = f"{entry.entry_id}_volume"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"PC Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "PC Remote",
-            "model": "PC",
-            "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
-        }
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def native_value(self) -> float | None:

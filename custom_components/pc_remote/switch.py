@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import PcRemoteClient
-from .const import CONF_HOST, DOMAIN
+from .const import DOMAIN, build_device_info
 from .coordinator import PcRemoteCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,13 +57,7 @@ class PcRemoteAppSwitch(
         self._app_key = app_key
         self._attr_name = display_name
         self._attr_unique_id = f"{entry.entry_id}_app_{app_key}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": f"PC Remote ({entry.data[CONF_HOST]})",
-            "manufacturer": "PC Remote",
-            "model": "PC",
-            "configuration_url": f"http://{entry.data[CONF_HOST]}:{entry.data['port']}",
-        }
+        self._attr_device_info = build_device_info(entry)
 
     @property
     def is_on(self) -> bool | None:
