@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 import aiohttp
 
@@ -29,7 +30,7 @@ class PcRemoteClient:
     # ------------------------------------------------------------------
 
     async def get_health(self) -> dict:
-        """Poll the health endpoint. Returns the JSON response."""
+        """Poll the health endpoint. Returns the unwrapped data payload."""
         try:
             async with self._session.get(
                 f"{self._base_url}/api/health",
@@ -39,7 +40,10 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
-                return await resp.json()
+                result = await resp.json()
+                if not result.get("success", True):
+                    _LOGGER.warning("Health endpoint returned failure: %s", result.get("message"))
+                return result.get("data", result)
         except aiohttp.ClientConnectorError as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
@@ -80,7 +84,10 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
-                return await resp.json()
+                result = await resp.json()
+                if not result.get("success", True):
+                    _LOGGER.warning("get_audio_devices returned failure: %s", result.get("message"))
+                return result.get("data", result)
         except aiohttp.ClientConnectorError as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
@@ -97,7 +104,10 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
-                return await resp.json()
+                result = await resp.json()
+                if not result.get("success", True):
+                    _LOGGER.warning("get_current_audio returned failure: %s", result.get("message"))
+                return result.get("data", result)
         except aiohttp.ClientConnectorError as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
@@ -107,7 +117,7 @@ class PcRemoteClient:
         """Set the active audio output device."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/audio/set/{device_name}",
+                f"{self._base_url}/api/audio/set/{quote(device_name, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -150,7 +160,10 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
-                return await resp.json()
+                result = await resp.json()
+                if not result.get("success", True):
+                    _LOGGER.warning("get_monitor_profiles returned failure: %s", result.get("message"))
+                return result.get("data", result)
         except aiohttp.ClientConnectorError as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
@@ -160,7 +173,7 @@ class PcRemoteClient:
         """Activate a monitor profile."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/monitor/set/{profile}",
+                f"{self._base_url}/api/monitor/set/{quote(profile, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -183,7 +196,10 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
-                return await resp.json()
+                result = await resp.json()
+                if not result.get("success", True):
+                    _LOGGER.warning("get_monitors returned failure: %s", result.get("message"))
+                return result.get("data", result)
         except aiohttp.ClientConnectorError as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
@@ -193,7 +209,7 @@ class PcRemoteClient:
         """Enable only this monitor, disable all others."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/monitor/solo/{monitor_id}",
+                f"{self._base_url}/api/monitor/solo/{quote(monitor_id, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -209,7 +225,7 @@ class PcRemoteClient:
         """Enable a monitor."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/monitor/enable/{monitor_id}",
+                f"{self._base_url}/api/monitor/enable/{quote(monitor_id, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -225,7 +241,7 @@ class PcRemoteClient:
         """Disable a monitor."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/monitor/disable/{monitor_id}",
+                f"{self._base_url}/api/monitor/disable/{quote(monitor_id, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -241,7 +257,7 @@ class PcRemoteClient:
         """Set a monitor as the primary display."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/monitor/primary/{monitor_id}",
+                f"{self._base_url}/api/monitor/primary/{quote(monitor_id, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -268,7 +284,10 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
-                return await resp.json()
+                result = await resp.json()
+                if not result.get("success", True):
+                    _LOGGER.warning("get_apps returned failure: %s", result.get("message"))
+                return result.get("data", result)
         except aiohttp.ClientConnectorError as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"
@@ -278,7 +297,7 @@ class PcRemoteClient:
         """Launch an app by key."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/app/launch/{app_key}",
+                f"{self._base_url}/api/app/launch/{quote(app_key, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -294,7 +313,7 @@ class PcRemoteClient:
         """Kill a running app by key."""
         try:
             async with self._session.post(
-                f"{self._base_url}/api/app/kill/{app_key}",
+                f"{self._base_url}/api/app/kill/{quote(app_key, safe='')}",
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:

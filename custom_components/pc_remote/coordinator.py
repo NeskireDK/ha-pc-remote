@@ -53,13 +53,12 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         try:
             await self.client.get_health()
             data.online = True
-        except CannotConnectError:
-            return data
+        except CannotConnectError as err:
+            raise UpdateFailed(f"Cannot connect: {err}") from err
         except InvalidAuthError as err:
             raise UpdateFailed("Invalid API key") from err
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Unexpected error polling health: %s", err)
-            return data
+            raise UpdateFailed(f"Unexpected error: {err}") from err
 
         # Fetch audio state
         try:
