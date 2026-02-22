@@ -14,7 +14,6 @@ from .coordinator import PcRemoteCoordinator
 _LOGGER = __import__("logging").getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
-    Platform.BUTTON,
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SWITCH,

@@ -1,8 +1,5 @@
 {
   "entity": {
-    "button": {
-      "sleep": { "name": "Sleep" }
-    },
     "select": {
       "audio_output": { "name": "Audio Output" },
       "monitor_profile": { "name": "Monitor Profile" },
