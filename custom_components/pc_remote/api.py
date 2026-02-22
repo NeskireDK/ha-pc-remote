@@ -319,6 +319,86 @@ class PcRemoteClient:
             ) from err
 
     # ------------------------------------------------------------------
+    # Steam
+    # ------------------------------------------------------------------
+
+    async def get_steam_games(self) -> list[dict]:
+        """Get recently played Steam games."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/steam/games",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                result = await resp.json()
+                if not result.get("success", True):
+                    msg = result.get("message", "Unknown error")
+                    _LOGGER.warning("API call failed: %s", msg)
+                    raise CannotConnectError(f"API error: {msg}")
+                return result.get("data", result)
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def get_steam_running(self) -> dict | None:
+        """Get the currently running Steam game, or None."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/steam/running",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                result = await resp.json()
+                if not result.get("success", True):
+                    msg = result.get("message", "Unknown error")
+                    _LOGGER.warning("API call failed: %s", msg)
+                    raise CannotConnectError(f"API error: {msg}")
+                return result.get("data")  # Can be None if no game running
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def steam_run(self, app_id: int) -> None:
+        """Launch a Steam game (idempotent -- closes current if different)."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/steam/run/{app_id}",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def steam_stop(self) -> None:
+        """Stop the currently running Steam game."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/steam/stop",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    # ------------------------------------------------------------------
     # Connection test
     # ------------------------------------------------------------------
 

@@ -34,6 +34,8 @@ class PcRemoteData:
     monitor_profiles: list[str] = field(default_factory=list)
     monitors: list[dict] = field(default_factory=list)
     apps: list[dict] = field(default_factory=list)
+    steam_games: list[dict] = field(default_factory=list)
+    steam_running: dict | None = None
 
 
 class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
@@ -117,5 +119,16 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
             data.apps = await self.client.get_apps()
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch apps: %s", err)
+
+        # Fetch Steam state
+        try:
+            data.steam_games = await self.client.get_steam_games()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed to fetch Steam games: %s", err)
+
+        try:
+            data.steam_running = await self.client.get_steam_running()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed to fetch Steam running game: %s", err)
 
         return data
