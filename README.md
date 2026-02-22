@@ -43,6 +43,19 @@ Two ways to add the integration:
 
 App switches are created dynamically based on apps configured in the Windows service.
 
+## Roadmap
+
+### Wake-and-play
+
+The Steam media player caches the game list locally, so the source list remains populated even when the PC is off and across HA restarts. The next step is full wake-and-play: selecting a game while the PC is off will automatically wake and launch it.
+
+Planned steps:
+
+- [ ] When a game is selected and `online = false`, send a WoL magic packet
+- [ ] Poll `/api/health` until the service responds (PC is up)
+- [ ] Poll `/api/steam/running` until Steam is reachable (Steam may take longer to start than the service)
+- [ ] Launch the game via `/api/steam/run/{appId}`
+
 ## License
 
 MIT

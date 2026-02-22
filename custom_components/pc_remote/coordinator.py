@@ -9,6 +9,7 @@ import time
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import CannotConnectError, InvalidAuthError, PcRemoteClient
@@ -19,6 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 # After a power action, assume the expected state for this many seconds
 # before trusting polled data again. PC takes time to sleep/wake.
 POWER_HOLD_SECONDS = 30
+
+STEAM_GAMES_STORAGE_VERSION = 1
 
 
 @dataclass
@@ -45,6 +48,7 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         self,
         hass: HomeAssistant,
         client: PcRemoteClient,
+        entry_id: str,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -55,6 +59,19 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         )
         self.client = client
         self._power_override: tuple[bool, float] | None = None
+        self._steam_games_store: Store = Store(
+            hass,
+            STEAM_GAMES_STORAGE_VERSION,
+            f"{DOMAIN}.{entry_id}.steam_games",
+        )
+        self._cached_steam_games: list[dict] = []
+
+    async def async_load_steam_cache(self) -> None:
+        """Load persisted Steam game list from storage. Call before first refresh."""
+        stored = await self._steam_games_store.async_load()
+        if isinstance(stored, list):
+            self._cached_steam_games = stored
+            _LOGGER.debug("Loaded %d Steam games from cache", len(stored))
 
     def set_power_state(self, online: bool) -> None:
         """Hold an assumed power state until the next poll cycle catches up."""
@@ -86,6 +103,8 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
                 self._power_override = None
 
         if not data.online:
+            # Serve the last known game list so the source_list remains populated
+            data.steam_games = list(self._cached_steam_games)
             return data
 
         # Fetch audio state
@@ -122,9 +141,14 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
 
         # Fetch Steam state
         try:
-            data.steam_games = await self.client.get_steam_games()
+            fetched = await self.client.get_steam_games()
+            if fetched:
+                self._cached_steam_games = fetched
+                await self._steam_games_store.async_save(fetched)
+            data.steam_games = list(self._cached_steam_games)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch Steam games: %s", err)
+            data.steam_games = list(self._cached_steam_games)
 
         try:
             data.steam_running = await self.client.get_steam_running()

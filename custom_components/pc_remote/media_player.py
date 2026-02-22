@@ -71,8 +71,8 @@ class PcRemoteSteamPlayer(
 
     @property
     def available(self) -> bool:
-        """Available only when the PC is online."""
-        return super().available and self.coordinator.data.online
+        """Always available — source list is shown even when PC is offline."""
+        return super().available
 
     @property
     def state(self) -> MediaPlayerState:
@@ -110,6 +110,9 @@ class PcRemoteSteamPlayer(
 
     async def async_select_source(self, source: str) -> None:
         """Launch the selected game."""
+        if not self.coordinator.data.online:
+            _LOGGER.warning("PC is offline, cannot launch game: %s", source)
+            return
         # Find the appId for the selected game name
         for game in self.coordinator.data.steam_games:
             if game.get("name") == source:
@@ -127,6 +130,8 @@ class PcRemoteSteamPlayer(
 
     async def async_media_stop(self) -> None:
         """Stop the currently running game."""
+        if not self.coordinator.data.online:
+            return
         await self._client.steam_stop()
         # Optimistic update
         self.coordinator.data.steam_running = None
