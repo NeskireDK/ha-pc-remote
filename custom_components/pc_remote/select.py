@@ -27,6 +27,7 @@ async def async_setup_entry(
         PcRemoteAudioOutputSelect(coordinator, client, entry),
         PcRemoteMonitorProfileSelect(coordinator, client, entry),
         PcRemoteMonitorSoloSelect(coordinator, client, entry),
+        PcRemoteModeSelect(coordinator, client, entry),
     ])
 
 
@@ -197,3 +198,56 @@ class PcRemoteMonitorSoloSelect(
         if monitor_id is not None:
             await self._client.solo_monitor(monitor_id)
             await self.coordinator.async_request_refresh()
+
+
+class PcRemoteModeSelect(
+    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
+):
+    """Select entity for applying a PC mode."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "pc_mode"
+    _attr_icon = "mdi:television-play"
+
+    def __init__(
+        self,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(coordinator)
+        self._client = client
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_pc_mode"
+        self._current_mode: str | None = None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info from latest coordinator data."""
+        return build_device_info(
+            self._entry,
+            machine_name=self.coordinator.data.machine_name,
+            sw_version=self.coordinator.data.service_version,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Available only when the PC is online."""
+        return super().available and self.coordinator.data.online
+
+    @property
+    def options(self) -> list[str]:
+        """Return the list of available PC modes."""
+        return self.coordinator.data.modes
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the last-set mode."""
+        return self._current_mode
+
+    async def async_select_option(self, option: str) -> None:
+        """Apply the selected PC mode."""
+        await self._client.set_mode(option)
+        self._current_mode = option
+        self.async_write_ha_state()

@@ -1,0 +1,43 @@
+blueprint:
+  name: PC Remote - Post-session sleep
+  description: Sleep the PC after the Steam player leaves the playing state and remains idle for a configurable period.
+  domain: automation
+  input:
+    steam_player:
+      name: Steam media player
+      description: The PC Remote Steam media player entity.
+      selector:
+        entity:
+          domain: media_player
+    pc_power_switch:
+      name: PC power switch
+      description: The PC Remote power switch entity.
+      selector:
+        entity:
+          domain: switch
+    idle_minutes:
+      name: Idle minutes
+      description: Minutes to wait after playback stops before sleeping.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+
+trigger:
+  - platform: state
+    entity_id: !input steam_player
+    from: "playing"
+
+action:
+  - delay:
+      minutes: !input idle_minutes
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input steam_player
+        state: "playing"
+  - action: switch.turn_off
+    target:
+      entity_id: !input pc_power_switch

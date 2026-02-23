@@ -58,6 +58,66 @@ class PcRemoteClient:
     # System
     # ------------------------------------------------------------------
 
+    async def get_system_state(self) -> dict:
+        """Get aggregated system state from the service."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/system/state",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                result = await resp.json()
+                if not result.get("success", True):
+                    msg = result.get("message", "Unknown error")
+                    _LOGGER.warning("API call failed: %s", msg)
+                    raise CannotConnectError(f"API error: {msg}")
+                return result.get("data", result)
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def get_modes(self) -> list[str]:
+        """Get available PC modes."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/system/modes",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                result = await resp.json()
+                if not result.get("success", True):
+                    msg = result.get("message", "Unknown error")
+                    _LOGGER.warning("API call failed: %s", msg)
+                    raise CannotConnectError(f"API error: {msg}")
+                return result.get("data", result)
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
+    async def set_mode(self, mode_name: str) -> None:
+        """Apply a PC mode."""
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/system/mode/{quote(mode_name, safe='')}",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
     async def sleep(self) -> None:
         """Send the sleep command to the PC."""
         try:

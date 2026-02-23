@@ -22,9 +22,61 @@ These are documented bugs that undermine trust in the integration.
 
 ---
 
+## Architecture Refactor — Collapse Service + Tray into Single Process *(done in v0.9.1)*
+
+### Background
+
+The old architecture had a Windows Service (SYSTEM session) and a WinForms tray app (user session) communicating via named pipe IPC. Every meaningful feature required the user session anyway — audio, monitors, Steam, app launch. Collapsed everything into the tray process. Kestrel runs inside the tray. No IPC, no session boundary, no `TrayUnavailableException`. Linux gets a natural headless binary as well.
+
+### Releases
+
+#### ~~0.9.2~~ — Extract `HaPcRemote.Core` library *(shipped in v0.9.1)*
+
+- [x] Create `HaPcRemote.Core` class library
+- [x] Move services, interfaces, implementations, endpoints, models into Core
+- [x] `HaPcRemote.Tray` references Core
+- [x] Update test project references
+
+#### ~~0.9.3~~ — Embed Kestrel in Tray, replace IPC with direct calls *(shipped in v0.9.1)*
+
+- [x] Add ASP.NET Core / Kestrel hosting to `HaPcRemote.Tray`
+- [x] Wire all Core services into Tray's DI container
+- [x] Replace IPC wrappers with direct calls (`WindowsSteamPlatform`, `CliRunner`, `Process.Start`)
+- [x] Migrate config path to `%AppData%\HaPcRemote\`
+
+#### ~~0.9.4~~ — Delete Service project, IPC layer, update installer *(shipped in v0.9.1)*
+
+- [x] Delete `HaPcRemote.Service` project
+- [x] Delete IPC layer and wrappers
+- [x] Update Inno Setup installer (no service registration, startup via all-users startup folder, config migration)
+- [x] Update README
+
+#### 0.9.5 — Linux foundation *(service repo)*
+
+Same binary, headless mode, systemd user service.
+
+- [ ] Wrap all WinForms/tray code behind `OperatingSystem.IsWindows()` / `[SupportedOSPlatform]`
+- [ ] Add Linux `IPowerService`: `systemctl suspend` or `loginctl suspend`
+- [ ] Add Linux `ISteamPlatform`: filesystem path (`~/.steam/steam/`), running game via `/proc` or VDF, launch via `xdg-open steam://run/<id>`
+- [ ] Add Linux audio stub (`pactl`-based `ICliRunner` calls) — partial is fine initially
+- [ ] Add headless entry point (Linux): plain Kestrel + mDNS, no tray icon, SIGTERM clean exit
+- [ ] Add systemd user service unit file to release artifacts
+- [ ] Add Linux build job to GitHub Actions CI
+- [ ] Document install steps for Arch / Ubuntu / SteamOS in README
+
+### Key decisions made
+
+- **Why collapse?** Every feature requires the user session. IPC is complexity with no benefit.
+- **Config path**: moves to `%AppData%` (user-owned, no elevation needed for reads/writes)
+- **Native AOT**: dropped — framework-dependent is fine, .NET 10 auto-install already ships
+- **Linux tray**: no system tray on Linux. API key via config file, logs via `journalctl`, updates via package manager — these are Linux-native equivalents, not a degraded experience.
+- **Monitor profiles on Linux**: xrandr/Wayland too fragmented — skip initially, document as known gap
+
+---
+
 ## v1.0
 
-### 1. PC Mode — `POST /api/system/mode` + `select` entity
+### 1. PC Mode — `POST /api/system/mode` + `select` entity *(done in v1.0)*
 
 Single endpoint that atomically sequences audio output, monitor profile, volume, and
 app launch/kill from a named config block.
@@ -50,74 +102,36 @@ HA exposes a `select` entity "PC Mode" with options from `GET /api/system/modes`
 Selecting a mode calls the endpoint. The service handles sequencing and waits between
 steps — no fragile automation chains.
 
-- [ ] Service: add `Modes` config section and `POST /api/system/mode` endpoint *(service)*
-- [ ] Service: add `GET /api/system/modes` to list available mode names *(service)*
-- [ ] Integration: `PcRemoteModeSelect` entity in `select.py` *(integration)*
-- [ ] Integration: `set_mode()` in `api.py` *(integration)*
+- [x] Service: add `Modes` config section and `POST /api/system/mode` endpoint *(service)*
+- [x] Service: add `GET /api/system/modes` to list available mode names *(service)*
+- [x] Integration: `PcRemoteModeSelect` entity in `select.py` *(integration)*
+- [x] Integration: `set_mode()` in `api.py` *(integration)*
 
-### 2. Couch Gaming Automation Blueprint
+### 2. Couch Gaming Automation Blueprint *(done in v1.0)*
 
 Blueprint with selector inputs — no hard-coded entity names.
 
-Inputs:
-- `trigger_entity` — any binary sensor or media player (TV power, controller sensor, etc.)
-- `trigger_state` — state that activates couch mode
-- `pc_power_switch` — PC Remote power switch
-- `pc_mode_select` — PC Mode select entity (from feature 1)
-- `couch_mode_name` — default: `couch`
-- `desktop_mode_name` — default: `desktop`
-- `sleep_on_revert` — sleep PC when leaving couch mode
+- [x] `blueprints/automation/pc_remote/couch_gaming.yaml` *(integration)*
 
-Two automations in the blueprint: enter (wake if offline → select couch mode),
-exit (select desktop mode → optionally sleep).
-
-- [ ] `blueprints/automation/pc_remote/couch_gaming.yaml` *(integration)*
-
-### 3. Aggregated State Endpoint — `GET /api/system/state`
+### 3. Aggregated State Endpoint — `GET /api/system/state` *(done in v1.0)*
 
 Single endpoint replaces the 6+ individual coordinator calls per poll cycle.
 
-```json
-{
-  "audio": { "devices": [...], "current": "Speakers", "volume": 40 },
-  "monitors": [...],
-  "monitorProfiles": [...],
-  "apps": [...],
-  "steam": { "games": [...], "running": null }
-}
-```
-
-Prerequisite for reducing poll interval to 10s so mode switches feel responsive.
-
-- [ ] Service: add `GET /api/system/state` endpoint *(service)*
-- [ ] Integration: refactor `_async_update_data` to use single call *(integration)*
+- [x] Service: add `GET /api/system/state` endpoint *(service)*
+- [x] Integration: refactor `_async_update_data` to use single call *(integration)*
 
 ---
 
 ## v1.1
 
-### 4. Controller Connected Binary Sensor
-
-`Windows.Gaming.Input` via tray IPC exposes connected gamepads. HA gets a
-`binary_sensor` that is `on` when at least one controller is connected.
-`extra_state_attributes` lists controller names.
-
-Natural automation trigger: pick up controller → enter couch mode automatically.
-
-- [ ] Service: tray IPC `controllerGetConnected`, expose via `GET /api/system/controllers` *(service)*
-- [ ] Integration: `PcRemoteControllerSensor` in new `binary_sensor.py` platform *(integration)*
-
-### 5. Post-Session Sleep Blueprint
+### 4. Post-Session Sleep Blueprint *(done in v1.0)*
 
 When the Steam media player transitions `playing → idle`, wait N minutes, confirm
 still idle, then sleep the PC. Closes the power-saving loop without manual action.
 
-Inputs: `steam_player`, `pc_power_switch`, `idle_minutes` (default: 10),
-`require_controller_disconnected`.
+- [x] `blueprints/automation/pc_remote/post_session_sleep.yaml` *(integration)*
 
-- [ ] `blueprints/automation/pc_remote/post_session_sleep.yaml` *(integration)*
-
-### 6. User Idle Time Sensor
+### 5. User Idle Time Sensor
 
 `GetLastInputInfo` Win32 API (via tray IPC) → seconds since last keyboard/mouse input.
 Guards the sleep blueprint against sleeping a PC that someone is actively using at the desk.

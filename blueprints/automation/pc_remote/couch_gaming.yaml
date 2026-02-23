@@ -1,0 +1,103 @@
+blueprint:
+  name: PC Remote - Couch gaming mode
+  description: Switches the PC between couch and desktop modes based on a trigger entity (e.g. TV power sensor). Wakes the PC on entry and optionally sleeps it on exit.
+  domain: automation
+  input:
+    trigger_entity:
+      name: Trigger entity
+      description: The entity that signals couch mode is active (e.g. a TV power binary sensor).
+      selector:
+        entity:
+          domain:
+            - binary_sensor
+            - media_player
+            - input_boolean
+    trigger_state:
+      name: Trigger state
+      description: The state of the trigger entity that means "enter couch mode".
+      default: "on"
+      selector:
+        text:
+    pc_power_switch:
+      name: PC power switch
+      description: The PC Remote WoL/sleep power switch entity.
+      selector:
+        entity:
+          domain: switch
+    pc_mode_select:
+      name: PC mode select
+      description: The PC Remote mode select entity.
+      selector:
+        entity:
+          domain: select
+    couch_mode_name:
+      name: Couch mode name
+      description: The option name for couch mode on the PC mode select entity.
+      default: "couch"
+      selector:
+        text:
+    desktop_mode_name:
+      name: Desktop mode name
+      description: The option name for desktop mode on the PC mode select entity.
+      default: "desktop"
+      selector:
+        text:
+    sleep_on_exit:
+      name: Sleep on exit
+      description: Sleep the PC when leaving couch mode.
+      default: true
+      selector:
+        boolean:
+
+trigger:
+  - platform: state
+    entity_id: !input trigger_entity
+    to: !input trigger_state
+    id: enter_couch
+  - platform: state
+    entity_id: !input trigger_entity
+    from: !input trigger_state
+    id: exit_couch
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: enter_couch
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input pc_power_switch
+                state: "off"
+            then:
+              - action: switch.turn_on
+                target:
+                  entity_id: !input pc_power_switch
+              - wait_for_trigger:
+                  - platform: state
+                    entity_id: !input pc_power_switch
+                    to: "on"
+                timeout:
+                  seconds: 60
+                continue_on_timeout: false
+          - action: select.select_option
+            target:
+              entity_id: !input pc_mode_select
+            data:
+              option: !input couch_mode_name
+      - conditions:
+          - condition: trigger
+            id: exit_couch
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: !input pc_mode_select
+            data:
+              option: !input desktop_mode_name
+          - if:
+              - condition: template
+                value_template: !input sleep_on_exit
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: !input pc_power_switch
