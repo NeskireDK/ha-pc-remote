@@ -76,7 +76,7 @@ Same binary, headless mode, systemd user service.
 
 ## v1.0
 
-### 1. PC Mode — `POST /api/system/mode` + `select` entity
+### 1. PC Mode — `POST /api/system/mode` + `select` entity *(done in v1.0)*
 
 Single endpoint that atomically sequences audio output, monitor profile, volume, and
 app launch/kill from a named config block.
@@ -102,65 +102,36 @@ HA exposes a `select` entity "PC Mode" with options from `GET /api/system/modes`
 Selecting a mode calls the endpoint. The service handles sequencing and waits between
 steps — no fragile automation chains.
 
-- [ ] Service: add `Modes` config section and `POST /api/system/mode` endpoint *(service)*
-- [ ] Service: add `GET /api/system/modes` to list available mode names *(service)*
-- [ ] Integration: `PcRemoteModeSelect` entity in `select.py` *(integration)*
-- [ ] Integration: `set_mode()` in `api.py` *(integration)*
+- [x] Service: add `Modes` config section and `POST /api/system/mode` endpoint *(service)*
+- [x] Service: add `GET /api/system/modes` to list available mode names *(service)*
+- [x] Integration: `PcRemoteModeSelect` entity in `select.py` *(integration)*
+- [x] Integration: `set_mode()` in `api.py` *(integration)*
 
-### 2. Couch Gaming Automation Blueprint
+### 2. Couch Gaming Automation Blueprint *(done in v1.0)*
 
 Blueprint with selector inputs — no hard-coded entity names.
 
-Inputs:
-- `trigger_entity` — any binary sensor or media player (TV power, controller sensor, etc.)
-- `trigger_state` — state that activates couch mode
-- `pc_power_switch` — PC Remote power switch
-- `pc_mode_select` — PC Mode select entity (from feature 1)
-- `couch_mode_name` — default: `couch`
-- `desktop_mode_name` — default: `desktop`
-- `sleep_on_revert` — sleep PC when leaving couch mode
+- [x] `blueprints/automation/pc_remote/couch_gaming.yaml` *(integration)*
 
-Two automations in the blueprint: enter (wake if offline → select couch mode),
-exit (select desktop mode → optionally sleep).
-
-- [ ] `blueprints/automation/pc_remote/couch_gaming.yaml` *(integration)*
-
-### 3. Aggregated State Endpoint — `GET /api/system/state`
+### 3. Aggregated State Endpoint — `GET /api/system/state` *(done in v1.0)*
 
 Single endpoint replaces the 6+ individual coordinator calls per poll cycle.
 
-```json
-{
-  "audio": { "devices": [...], "current": "Speakers", "volume": 40 },
-  "monitors": [...],
-  "monitorProfiles": [...],
-  "apps": [...],
-  "steam": { "games": [...], "running": null }
-}
-```
-
-Prerequisite for reducing poll interval to 10s so mode switches feel responsive.
-
-- [ ] Service: add `GET /api/system/state` endpoint *(service)*
-- [ ] Integration: refactor `_async_update_data` to use single call *(integration)*
+- [x] Service: add `GET /api/system/state` endpoint *(service)*
+- [x] Integration: refactor `_async_update_data` to use single call *(integration)*
 
 ---
 
 ## v1.1
 
-### 4. Post-Session Sleep Blueprint
-
-
+### 4. Post-Session Sleep Blueprint *(done in v1.0)*
 
 When the Steam media player transitions `playing → idle`, wait N minutes, confirm
 still idle, then sleep the PC. Closes the power-saving loop without manual action.
 
-Inputs: `steam_player`, `pc_power_switch`, `idle_minutes` (default: 10),
-`require_controller_disconnected`.
+- [x] `blueprints/automation/pc_remote/post_session_sleep.yaml` *(integration)*
 
-- [ ] `blueprints/automation/pc_remote/post_session_sleep.yaml` *(integration)*
-
-### 6. User Idle Time Sensor
+### 5. User Idle Time Sensor
 
 `GetLastInputInfo` Win32 API (via tray IPC) → seconds since last keyboard/mouse input.
 Guards the sleep blueprint against sleeping a PC that someone is actively using at the desk.
