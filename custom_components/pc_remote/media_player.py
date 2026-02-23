@@ -112,6 +112,19 @@ class PcRemoteSteamPlayer(
         target = self._wake_target or self.coordinator.data.steam_running
         return {"app_id": target.get("appId")} if target else None
 
+    @property
+    def media_image_url(self) -> str | None:
+        """Return Steam CDN artwork URL for the running game."""
+        running = self.coordinator.data.steam_running
+        if running and (app_id := running.get("appId")):
+            return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
+        return None
+
+    @property
+    def media_image_remotely_accessible(self) -> bool:
+        """Image is hosted on Steam CDN — no proxying needed."""
+        return True
+
     async def async_will_remove_from_hass(self) -> None:
         """Cancel any pending wake-and-play task on removal."""
         if self._wake_task and not self._wake_task.done():
@@ -123,6 +136,7 @@ class PcRemoteSteamPlayer(
             if game.get("name") == source:
                 app_id = game.get("appId")
                 if app_id is None:
+                    _LOGGER.warning("Source '%s' not found in steam games list", source)
                     return
                 if not self.coordinator.data.online:
                     if self._wake_task and not self._wake_task.done():
@@ -133,7 +147,11 @@ class PcRemoteSteamPlayer(
                         self._wake_and_play(app_id, source)
                     )
                     return
-                await self._client.steam_run(app_id)
+                try:
+                    await self._client.steam_run(app_id)
+                except CannotConnectError as err:
+                    _LOGGER.error("Failed to launch Steam game '%s': %s", source, err)
+                    return
                 self.coordinator.data.steam_running = {"appId": app_id, "name": source}
                 self.async_write_ha_state()
                 return
