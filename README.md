@@ -55,14 +55,6 @@ The Steam media player caches the game list locally, so the source list remains 
 - [x] Poll `/api/steam/running` until Steam is reachable (Steam may take longer to start than the service)
 - [x] Launch the game via `/api/steam/run/{appId}`
 
-## Known Issues
-
-### Monitor profiles: entity shows empty option list
-
-`GET /api/monitor/profiles` returns an empty list if the `ProfilesPath` directory does not exist next to the service exe. The entity has no options to select.
-
-Fix: add `.cfg` files exported from MultiMonitorTool to the `monitor-profiles/` directory next to `HaPcRemote.Service.exe` (created automatically on first run).
-
 ## License
 
 MIT
