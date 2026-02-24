@@ -118,22 +118,20 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
                 data.online = expected
                 data.steam_games = list(self._cached_steam_games)
                 return data
-            else:
-                self._power_override = None
+            self._power_override = None
 
-        if self._power_override is None:
-            # Check health
-            try:
-                health = await self.client.get_health()
-                data.online = True
-                data.machine_name = health.get("machineName", "")
-                data.service_version = health.get("version", "")
-            except CannotConnectError:
-                data.online = False
-            except InvalidAuthError as err:
-                raise ConfigEntryAuthFailed("Invalid API key") from err
-            except Exception as err:  # noqa: BLE001
-                raise UpdateFailed(f"Unexpected error: {err}") from err
+        # Check health
+        try:
+            health = await self.client.get_health()
+            data.online = True
+            data.machine_name = health.get("machineName", "")
+            data.service_version = health.get("version", "")
+        except CannotConnectError:
+            data.online = False
+        except InvalidAuthError as err:
+            raise ConfigEntryAuthFailed("Invalid API key") from err
+        except Exception as err:  # noqa: BLE001
+            raise UpdateFailed(f"Unexpected error: {err}") from err
 
         if not data.online:
             # Serve the last known game list so the source_list remains populated

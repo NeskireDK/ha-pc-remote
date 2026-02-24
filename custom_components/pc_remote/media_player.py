@@ -79,11 +79,6 @@ class PcRemoteSteamPlayer(
         )
 
     @property
-    def available(self) -> bool:
-        """Always available — source list is shown even when PC is offline."""
-        return super().available
-
-    @property
     def state(self) -> MediaPlayerState:
         """Return the state of the media player."""
         if self._wake_target is not None:
@@ -141,28 +136,9 @@ class PcRemoteSteamPlayer(
             if game.get("name") == source:
                 app_id = game.get("appId")
                 if app_id is None:
-                    _LOGGER.warning("Source '%s' not found in steam games list", source)
+                    _LOGGER.warning("Source '%s' has no appId", source)
                     return
-                if not self.coordinator.data.online:
-                    if self._wake_task and not self._wake_task.done():
-                        self._wake_task.cancel()
-                    self._wake_target = {"appId": app_id, "name": source}
-                    self.async_write_ha_state()
-                    self._wake_task = self.hass.async_create_task(
-                        self._wake_and_play(app_id, source)
-                    )
-                    return
-                try:
-                    result = await self._client.steam_run(app_id)
-                except CannotConnectError as err:
-                    _LOGGER.error("Failed to launch Steam game '%s': %s", source, err)
-                    return
-                # Optimistic update, then schedule a refresh for consistency
-                self.coordinator.data.steam_running = (
-                    result or {"appId": app_id, "name": source}
-                )
-                self.async_write_ha_state()
-                await self.coordinator.async_request_refresh()
+                await self._launch_or_wake(app_id, source)
                 return
         _LOGGER.warning("Steam game not found in list: %s", source)
 
@@ -171,7 +147,6 @@ class PcRemoteSteamPlayer(
         if not self.coordinator.data.online:
             return
         await self._client.steam_stop()
-        # Optimistic update, then refresh for consistency
         self.coordinator.data.steam_running = None
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
@@ -218,12 +193,14 @@ class PcRemoteSteamPlayer(
             _LOGGER.warning("Invalid media_id for Steam game: %s", media_id)
             return
 
-        # Find the game name from the list for display
         name = next(
             (g.get("name", "") for g in self.coordinator.data.steam_games if g.get("appId") == app_id),
             f"Game {app_id}",
         )
+        await self._launch_or_wake(app_id, name)
 
+    async def _launch_or_wake(self, app_id: int, name: str) -> None:
+        """Launch a game, or wake the PC first if offline."""
         if not self.coordinator.data.online:
             if self._wake_task and not self._wake_task.done():
                 self._wake_task.cancel()
@@ -237,7 +214,7 @@ class PcRemoteSteamPlayer(
         try:
             result = await self._client.steam_run(app_id)
         except CannotConnectError as err:
-            _LOGGER.error("Failed to launch Steam game %d: %s", app_id, err)
+            _LOGGER.error("Failed to launch Steam game '%s': %s", name, err)
             return
         self.coordinator.data.steam_running = (
             result or {"appId": app_id, "name": name}
