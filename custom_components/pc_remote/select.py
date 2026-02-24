@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,6 +14,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api import PcRemoteClient
 from .const import DOMAIN, build_device_info
 from .coordinator import PcRemoteCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -31,26 +35,25 @@ async def async_setup_entry(
     ])
 
 
-class PcRemoteAudioOutputSelect(
+class PcRemoteSelectBase(
     CoordinatorEntity[PcRemoteCoordinator], SelectEntity
 ):
-    """Select entity for choosing the active audio output device."""
+    """Base class for PC Remote select entities."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "audio_output"
-    _attr_icon = "mdi:speaker"
 
     def __init__(
         self,
         coordinator: PcRemoteCoordinator,
         client: PcRemoteClient,
         entry: ConfigEntry,
+        unique_id_suffix: str,
     ) -> None:
         """Initialize the select entity."""
         super().__init__(coordinator)
         self._client = client
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_audio_output"
+        self._attr_unique_id = f"{entry.entry_id}_{unique_id_suffix}"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -65,6 +68,22 @@ class PcRemoteAudioOutputSelect(
     def available(self) -> bool:
         """Available only when the PC is online."""
         return super().available and self.coordinator.data.online
+
+
+class PcRemoteAudioOutputSelect(PcRemoteSelectBase):
+    """Select entity for choosing the active audio output device."""
+
+    _attr_translation_key = "audio_output"
+    _attr_icon = "mdi:speaker"
+
+    def __init__(
+        self,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the select entity."""
+        super().__init__(coordinator, client, entry, "audio_output")
 
     @property
     def options(self) -> list[str]:
@@ -83,12 +102,9 @@ class PcRemoteAudioOutputSelect(
         self.async_write_ha_state()
 
 
-class PcRemoteMonitorProfileSelect(
-    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
-):
+class PcRemoteMonitorProfileSelect(PcRemoteSelectBase):
     """Select entity for choosing a monitor profile."""
 
-    _attr_has_entity_name = True
     _attr_translation_key = "monitor_profile"
     _attr_icon = "mdi:monitor-shimmer"
 
@@ -99,24 +115,7 @@ class PcRemoteMonitorProfileSelect(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the select entity."""
-        super().__init__(coordinator)
-        self._client = client
-        self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_monitor_profile"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
-
-    @property
-    def available(self) -> bool:
-        """Available only when the PC is online."""
-        return super().available and self.coordinator.data.online
+        super().__init__(coordinator, client, entry, "monitor_profile")
 
     @property
     def options(self) -> list[str]:
@@ -136,12 +135,9 @@ class PcRemoteMonitorProfileSelect(
         self.async_write_ha_state()
 
 
-class PcRemoteMonitorSoloSelect(
-    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
-):
+class PcRemoteMonitorSoloSelect(PcRemoteSelectBase):
     """Select entity for choosing the sole active monitor."""
 
-    _attr_has_entity_name = True
     _attr_translation_key = "active_monitor"
     _attr_icon = "mdi:monitor"
 
@@ -152,24 +148,7 @@ class PcRemoteMonitorSoloSelect(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the select entity."""
-        super().__init__(coordinator)
-        self._client = client
-        self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_monitor_solo"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
-
-    @property
-    def available(self) -> bool:
-        """Available only when the PC is online."""
-        return super().available and self.coordinator.data.online
+        super().__init__(coordinator, client, entry, "monitor_solo")
 
     @property
     def options(self) -> list[str]:
@@ -197,17 +176,16 @@ class PcRemoteMonitorSoloSelect(
     async def async_select_option(self, option: str) -> None:
         """Solo the selected monitor."""
         monitor_id = self._monitor_id_for_name(option)
-        if monitor_id is not None:
-            await self._client.solo_monitor(monitor_id)
-            await self.coordinator.async_request_refresh()
+        if monitor_id is None:
+            _LOGGER.warning("Monitor '%s' not found in known monitors", option)
+            return
+        await self._client.solo_monitor(monitor_id)
+        await self.coordinator.async_request_refresh()
 
 
-class PcRemoteModeSelect(
-    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
-):
+class PcRemoteModeSelect(PcRemoteSelectBase):
     """Select entity for applying a PC mode."""
 
-    _attr_has_entity_name = True
     _attr_translation_key = "pc_mode"
     _attr_icon = "mdi:television-play"
 
@@ -218,24 +196,7 @@ class PcRemoteModeSelect(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the select entity."""
-        super().__init__(coordinator)
-        self._client = client
-        self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_pc_mode"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
-
-    @property
-    def available(self) -> bool:
-        """Available only when the PC is online."""
-        return super().available and self.coordinator.data.online
+        super().__init__(coordinator, client, entry, "pc_mode")
 
     @property
     def options(self) -> list[str]:

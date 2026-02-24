@@ -152,11 +152,12 @@ class PcRemoteSteamPlayer(
                 except CannotConnectError as err:
                     _LOGGER.error("Failed to launch Steam game '%s': %s", source, err)
                     return
-                if result:
-                    self.coordinator.data.steam_running = result
-                else:
-                    self.coordinator.data.steam_running = {"appId": app_id, "name": source}
+                # Optimistic update, then schedule a refresh for consistency
+                self.coordinator.data.steam_running = (
+                    result or {"appId": app_id, "name": source}
+                )
                 self.async_write_ha_state()
+                await self.coordinator.async_request_refresh()
                 return
         _LOGGER.warning("Steam game not found in list: %s", source)
 
@@ -165,9 +166,10 @@ class PcRemoteSteamPlayer(
         if not self.coordinator.data.online:
             return
         await self._client.steam_stop()
-        # Optimistic update
+        # Optimistic update, then refresh for consistency
         self.coordinator.data.steam_running = None
         self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
     async def _wake_and_play(self, app_id: int, source: str) -> None:
         """Wake the PC via WoL, then launch the game when Steam is ready."""
@@ -177,6 +179,9 @@ class PcRemoteSteamPlayer(
             self._wake_target = None
             self.async_write_ha_state()
             return
+
+        # Capture target — coordinator refreshes must not clear this
+        target = {"appId": app_id, "name": source}
         try:
             await self.hass.async_add_executor_job(send_magic_packet, mac)
         except (ValueError, OSError) as err:
@@ -185,6 +190,9 @@ class PcRemoteSteamPlayer(
         # Poll /api/health until service responds (max 3 minutes, every 5s)
         online = False
         for _ in range(36):
+            # Re-assert wake target each iteration — coordinator refreshes
+            # may have cleared it
+            self._wake_target = target
             await asyncio.sleep(5)
             try:
                 await self._client.get_health()
@@ -208,6 +216,7 @@ class PcRemoteSteamPlayer(
 
         # One retry after 15s if Steam wasn't ready right after boot
         if result is None:
+            self._wake_target = target
             await asyncio.sleep(15)
             try:
                 result = await self._client.steam_run(app_id)

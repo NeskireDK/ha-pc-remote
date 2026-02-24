@@ -215,21 +215,13 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         except CannotConnectError:
             _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
             errors["base"] = "cannot_connect"
-            return self.async_show_form(
-                step_id="select_mac",
-                data_schema=vol.Schema({}),
-                errors=errors,
-            )
         except InvalidAuthError:
             errors["base"] = "invalid_auth"
-            return self.async_show_form(
-                step_id="select_mac",
-                data_schema=vol.Schema({}),
-                errors=errors,
-            )
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
             errors["base"] = "unknown"
+
+        if errors:
             return self.async_show_form(
                 step_id="select_mac",
                 data_schema=vol.Schema({}),

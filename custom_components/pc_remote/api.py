@@ -438,6 +438,10 @@ class PcRemoteClient:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
                 result = await resp.json()
+                if not result.get("success", True):
+                    msg = result.get("message", "Unknown error")
+                    _LOGGER.warning("steam_run failed: %s", msg)
+                    raise CannotConnectError(f"API error: {msg}")
                 return result.get("data")  # SteamRunningGame dict or None
         except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise CannotConnectError(
