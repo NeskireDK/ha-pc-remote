@@ -27,11 +27,30 @@ jobs:
         run: python -c "import json; m = json.load(open('custom_components/pc_remote/manifest.json')); assert m['domain'] == 'pc_remote'"
 
       - name: Install test dependencies
-        run: pip install pytest pytest-cov pytest-homeassistant-custom-component
+        run: pip install pytest pytest-cov pytest-homeassistant-custom-component wakeonlan==3.1.0
 
       - name: Run tests with coverage
-        run: pytest tests/ --cov=custom_components/pc_remote --cov-report=term-missing --cov-report=html:coverage-report || true
-        # || true because there may be no tests yet
+        run: pytest tests/ --cov=custom_components/pc_remote --cov-report=term-missing --cov-report=html:coverage-report --cov-report=xml:coverage.xml --junitxml=test-results.xml
+
+      - name: Test summary
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: test-results.xml
+
+      - name: Coverage summary
+        if: always()
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage.xml
+          format: markdown
+          output: both
+
+      - name: Add coverage to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: code-coverage-results.md
 
       - name: Upload coverage report
         if: always()
