@@ -426,8 +426,8 @@ class PcRemoteClient:
                 f"Cannot connect to {self._base_url}"
             ) from err
 
-    async def steam_run(self, app_id: int) -> None:
-        """Launch a Steam game (idempotent -- closes current if different)."""
+    async def steam_run(self, app_id: int) -> dict | None:
+        """Launch a Steam game, return running game dict or None."""
         try:
             async with self._session.post(
                 f"{self._base_url}/api/steam/run/{app_id}",
@@ -437,6 +437,8 @@ class PcRemoteClient:
                 if resp.status == 401:
                     raise InvalidAuthError("Invalid API key")
                 resp.raise_for_status()
+                result = await resp.json()
+                return result.get("data")  # SteamRunningGame dict or None
         except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise CannotConnectError(
                 f"Cannot connect to {self._base_url}"

@@ -148,11 +148,14 @@ class PcRemoteSteamPlayer(
                     )
                     return
                 try:
-                    await self._client.steam_run(app_id)
+                    result = await self._client.steam_run(app_id)
                 except CannotConnectError as err:
                     _LOGGER.error("Failed to launch Steam game '%s': %s", source, err)
                     return
-                self.coordinator.data.steam_running = {"appId": app_id, "name": source}
+                if result:
+                    self.coordinator.data.steam_running = result
+                else:
+                    self.coordinator.data.steam_running = {"appId": app_id, "name": source}
                 self.async_write_ha_state()
                 return
         _LOGGER.warning("Steam game not found in list: %s", source)
@@ -196,29 +199,25 @@ class PcRemoteSteamPlayer(
             self.async_write_ha_state()
             return
 
-        # Retry launch — Steam/tray may not be ready immediately after boot.
-        # steam_run() returns 200 silently if tray is down, so verify via get_steam_running.
-        launched = False
-        for attempt in range(4):
-            if attempt > 0:
-                await asyncio.sleep(15)
-            try:
-                await self._client.steam_run(app_id)
-            except CannotConnectError as err:
-                _LOGGER.debug("Wake-and-play steam_run attempt %d: %s", attempt + 1, err)
-            await asyncio.sleep(10)
-            try:
-                running = await self._client.get_steam_running()
-                if running and running.get("appId") == app_id:
-                    launched = True
-                    break
-            except CannotConnectError:
-                pass
+        # Launch — service now polls internally and returns the running game
+        result = None
+        try:
+            result = await self._client.steam_run(app_id)
+        except CannotConnectError as err:
+            _LOGGER.debug("Wake-and-play steam_run attempt 1: %s", err)
 
-        if not launched:
-            _LOGGER.warning("Wake-and-play: game did not launch after 4 attempts")
+        # One retry after 15s if Steam wasn't ready right after boot
+        if result is None:
+            await asyncio.sleep(15)
+            try:
+                result = await self._client.steam_run(app_id)
+            except CannotConnectError as err:
+                _LOGGER.debug("Wake-and-play steam_run attempt 2: %s", err)
+
+        if result is None:
+            _LOGGER.warning("Wake-and-play: game did not launch after 2 attempts")
 
         self._wake_target = None
-        if launched:
-            self.coordinator.data.steam_running = {"appId": app_id, "name": source}
+        if result:
+            self.coordinator.data.steam_running = result
         await self.coordinator.async_request_refresh()

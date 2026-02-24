@@ -125,13 +125,15 @@ class PcRemoteMonitorProfileSelect(
 
     @property
     def current_option(self) -> str | None:
-        """Return the current option (not tracked)."""
-        return None
+        """Return the persisted monitor profile selection."""
+        return self.coordinator.data.current_monitor_profile
 
     async def async_select_option(self, option: str) -> None:
         """Activate the selected monitor profile."""
         await self._client.set_monitor_profile(option)
-        await self.coordinator.async_request_refresh()
+        self.coordinator.data.current_monitor_profile = option
+        await self.coordinator.persist_selection("monitor_profile", option)
+        self.async_write_ha_state()
 
 
 class PcRemoteMonitorSoloSelect(
@@ -220,7 +222,6 @@ class PcRemoteModeSelect(
         self._client = client
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_pc_mode"
-        self._current_mode: str | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -243,11 +244,12 @@ class PcRemoteModeSelect(
 
     @property
     def current_option(self) -> str | None:
-        """Return the last-set mode."""
-        return self._current_mode
+        """Return the persisted mode selection."""
+        return self.coordinator.data.current_mode
 
     async def async_select_option(self, option: str) -> None:
         """Apply the selected PC mode."""
         await self._client.set_mode(option)
-        self._current_mode = option
+        self.coordinator.data.current_mode = option
+        await self.coordinator.persist_selection("mode", option)
         self.async_write_ha_state()

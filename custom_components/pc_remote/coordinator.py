@@ -24,6 +24,9 @@ POWER_HOLD_SECONDS = 60
 STEAM_GAMES_STORAGE_VERSION = 1
 
 
+SELECTIONS_STORAGE_VERSION = 1
+
+
 @dataclass
 class PcRemoteData:
     """Data returned by the coordinator."""
@@ -40,6 +43,8 @@ class PcRemoteData:
     steam_games: list[dict] = field(default_factory=list)
     steam_running: dict | None = None
     modes: list[str] = field(default_factory=list)
+    current_mode: str | None = None
+    current_monitor_profile: str | None = None
 
 
 class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
@@ -66,6 +71,12 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
             f"{DOMAIN}.{entry_id}.steam_games",
         )
         self._cached_steam_games: list[dict] = []
+        self._selections_store: Store = Store(
+            hass,
+            SELECTIONS_STORAGE_VERSION,
+            f"{DOMAIN}.{entry_id}.selections",
+        )
+        self._prev_audio_device: str | None = None
 
     async def async_load_steam_cache(self) -> None:
         """Load persisted Steam game list from storage. Call before first refresh."""
@@ -73,6 +84,21 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         if isinstance(stored, list):
             self._cached_steam_games = stored
             _LOGGER.debug("Loaded %d Steam games from cache", len(stored))
+
+    async def load_selections(self) -> dict:
+        """Load persisted selections from storage."""
+        stored = await self._selections_store.async_load()
+        if isinstance(stored, dict):
+            _LOGGER.debug("Loaded selections from cache: %s", stored)
+            return stored
+        return {}
+
+    async def persist_selection(self, key: str, value: str | None) -> None:
+        """Persist a selection to storage."""
+        stored = await self._selections_store.async_load()
+        selections = stored if isinstance(stored, dict) else {}
+        selections[key] = value
+        await self._selections_store.async_save(selections)
 
     def set_power_state(self, online: bool) -> None:
         """Hold an assumed power state until the next poll cycle catches up."""
@@ -122,6 +148,7 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
                 await self._steam_games_store.async_save(self._cached_steam_games)
             if not data.steam_games:
                 data.steam_games = list(self._cached_steam_games)
+            await self._restore_selections(data)
             return data
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Aggregated state fetch failed, falling back to individual calls: %s", err)
@@ -175,7 +202,42 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch modes: %s", err)
 
+        await self._restore_selections(data)
         return data
+
+    async def _restore_selections(self, data: PcRemoteData) -> None:
+        """Restore persisted mode/profile, invalidating stale values."""
+        selections = await self.load_selections()
+        mode = selections.get("mode")
+        profile = selections.get("monitor_profile")
+
+        # Restore mode only if still in the available list
+        if mode and mode in data.modes:
+            data.current_mode = mode
+        else:
+            data.current_mode = None
+
+        # Restore profile only if still in the available list
+        if profile and profile in data.monitor_profiles:
+            data.current_monitor_profile = profile
+        else:
+            data.current_monitor_profile = None
+
+        # Audio change detection: if the audio device changed externally, clear mode
+        if (
+            data.current_mode
+            and self._prev_audio_device is not None
+            and data.current_audio_device != self._prev_audio_device
+        ):
+            _LOGGER.debug(
+                "Audio device changed from %s to %s, clearing persisted mode",
+                self._prev_audio_device,
+                data.current_audio_device,
+            )
+            data.current_mode = None
+            await self.persist_selection("mode", None)
+
+        self._prev_audio_device = data.current_audio_device
 
     def _populate_from_system_state(self, data: PcRemoteData, state: dict) -> None:
         """Populate PcRemoteData from an aggregated /api/system/state response."""
