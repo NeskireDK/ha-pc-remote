@@ -45,6 +45,7 @@ class PcRemoteData:
     modes: list[str] = field(default_factory=list)
     current_mode: str | None = None
     current_monitor_profile: str | None = None
+    idle_seconds: int | None = None
 
 
 class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
@@ -254,3 +255,4 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         data.steam_games = state.get("steamGames", [])
         data.steam_running = state.get("runningGame")
         data.modes = state.get("modes", [])
+        data.idle_seconds = state.get("idleSeconds")

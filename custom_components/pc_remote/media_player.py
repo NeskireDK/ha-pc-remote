@@ -7,9 +7,12 @@ import logging
 from typing import Any
 
 from homeassistant.components.media_player import (
+    BrowseMedia,
+    MediaClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaType,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -48,6 +51,8 @@ class PcRemoteSteamPlayer(
     _attr_supported_features = (
         MediaPlayerEntityFeature.SELECT_SOURCE
         | MediaPlayerEntityFeature.STOP
+        | MediaPlayerEntityFeature.BROWSE_MEDIA
+        | MediaPlayerEntityFeature.PLAY_MEDIA
     )
 
     def __init__(
@@ -168,6 +173,75 @@ class PcRemoteSteamPlayer(
         await self._client.steam_stop()
         # Optimistic update, then refresh for consistency
         self.coordinator.data.steam_running = None
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def async_browse_media(
+        self,
+        media_content_type: MediaType | str | None = None,
+        media_content_id: str | None = None,
+    ) -> BrowseMedia:
+        """Return browsable Steam games."""
+        games = self.coordinator.data.steam_games
+        children = [
+            BrowseMedia(
+                media_class=MediaClass.GAME,
+                media_content_id=str(g.get("appId", "")),
+                media_content_type=MediaType.GAME,
+                title=g.get("name", "Unknown"),
+                can_play=True,
+                can_expand=False,
+                thumbnail=f"https://cdn.cloudflare.steamstatic.com/steam/apps/{g.get('appId', 0)}/header.jpg",
+            )
+            for g in games
+        ]
+        return BrowseMedia(
+            media_class=MediaClass.DIRECTORY,
+            media_content_id="steam_games",
+            media_content_type=MediaType.GAME,
+            title="Steam Games",
+            can_play=False,
+            can_expand=True,
+            children=children,
+        )
+
+    async def async_play_media(
+        self,
+        media_type: MediaType | str,
+        media_id: str,
+        **kwargs: Any,
+    ) -> None:
+        """Launch a Steam game by app ID from the media browser."""
+        try:
+            app_id = int(media_id)
+        except (ValueError, TypeError):
+            _LOGGER.warning("Invalid media_id for Steam game: %s", media_id)
+            return
+
+        # Find the game name from the list for display
+        name = next(
+            (g.get("name", "") for g in self.coordinator.data.steam_games if g.get("appId") == app_id),
+            f"Game {app_id}",
+        )
+
+        if not self.coordinator.data.online:
+            if self._wake_task and not self._wake_task.done():
+                self._wake_task.cancel()
+            self._wake_target = {"appId": app_id, "name": name}
+            self.async_write_ha_state()
+            self._wake_task = self.hass.async_create_task(
+                self._wake_and_play(app_id, name)
+            )
+            return
+
+        try:
+            result = await self._client.steam_run(app_id)
+        except CannotConnectError as err:
+            _LOGGER.error("Failed to launch Steam game %d: %s", app_id, err)
+            return
+        self.coordinator.data.steam_running = (
+            result or {"appId": app_id, "name": name}
+        )
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
