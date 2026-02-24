@@ -242,6 +242,8 @@ def make_coordinator_data(**kwargs) -> PcRemoteData:
         ],
         steam_running=None,
         modes=["Gaming", "Work", "TV"],
+        current_mode=None,
+        current_monitor_profile=None,
     )
     defaults.update(kwargs)
     return PcRemoteData(**defaults)
@@ -255,6 +257,7 @@ def make_mock_coordinator(data: PcRemoteData | None = None) -> MagicMock:
     coordinator.hass.async_add_executor_job = AsyncMock()
     coordinator.hass.async_create_task = MagicMock()
     coordinator.async_request_refresh = AsyncMock()
+    coordinator.persist_selection = AsyncMock()
     coordinator.available = True
     return coordinator
 
@@ -290,7 +293,7 @@ def make_mock_client() -> MagicMock:
     client.kill_app = AsyncMock()
     client.get_steam_games = AsyncMock(return_value=[])
     client.get_steam_running = AsyncMock(return_value=None)
-    client.steam_run = AsyncMock()
+    client.steam_run = AsyncMock(return_value=None)
     client.steam_stop = AsyncMock()
     client.get_modes = AsyncMock(return_value=[])
     client.set_mode = AsyncMock()

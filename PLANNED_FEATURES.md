@@ -51,18 +51,18 @@ The old architecture had a Windows Service (SYSTEM session) and a WinForms tray 
 - [x] Update Inno Setup installer (no service registration, startup via all-users startup folder, config migration)
 - [x] Update README
 
-#### 0.9.5 — Linux foundation *(service repo)*
+#### 0.9.5 — Linux foundation *(service repo)* *(done)*
 
 Same binary, headless mode, systemd user service.
 
-- [ ] Wrap all WinForms/tray code behind `OperatingSystem.IsWindows()` / `[SupportedOSPlatform]`
-- [ ] Add Linux `IPowerService`: `systemctl suspend` or `loginctl suspend`
-- [ ] Add Linux `ISteamPlatform`: filesystem path (`~/.steam/steam/`), running game via `/proc` or VDF, launch via `xdg-open steam://run/<id>`
-- [ ] Add Linux audio stub (`pactl`-based `ICliRunner` calls) — partial is fine initially
-- [ ] Add headless entry point (Linux): plain Kestrel + mDNS, no tray icon, SIGTERM clean exit
-- [ ] Add systemd user service unit file to release artifacts
-- [ ] Add Linux build job to GitHub Actions CI
-- [ ] Document install steps for Arch / Ubuntu / SteamOS in README
+- [x] Wrap all WinForms/tray code behind `OperatingSystem.IsWindows()` / `[SupportedOSPlatform]`
+- [x] Add Linux `IPowerService`: `systemctl suspend` or `loginctl suspend`
+- [x] Add Linux `ISteamPlatform`: filesystem path (`~/.steam/steam/`), running game via VDF, launch via `xdg-open steam://run/<id>`
+- [x] Add Linux audio (`pactl`-based `LinuxAudioService`)
+- [x] Add headless entry point (Linux): plain Kestrel + mDNS, no tray icon, SIGTERM clean exit
+- [x] Add systemd user service unit file to release artifacts
+- [x] Add Linux build job to GitHub Actions CI
+- [x] Document install steps in README
 
 ### Key decisions made
 
@@ -133,8 +133,8 @@ still idle, then sleep the PC. Closes the power-saving loop without manual actio
 
 ### 5. User Idle Time Sensor
 
-`GetLastInputInfo` Win32 API (via tray IPC) → seconds since last keyboard/mouse input.
+`GetLastInputInfo` Win32 API → seconds since last keyboard/mouse input.
 Guards the sleep blueprint against sleeping a PC that someone is actively using at the desk.
 
-- [ ] Service: tray IPC `getIdleSeconds`, expose via `GET /api/system/idle` *(service)*
+- [ ] Service: expose via `GET /api/system/idle` *(service)*
 - [ ] Integration: `sensor` entity "Idle Time" (device class `duration`) *(integration)*

@@ -163,15 +163,30 @@ class TestExtraAttributes:
 
 class TestSelectSource:
     @pytest.mark.asyncio
-    async def test_launches_game_when_online(self):
+    async def test_launches_game_when_online_confirmed(self):
+        """steam_run returns confirmed game data -- used directly."""
         games = [{"appId": 570, "name": "Dota 2"}]
         data = make_coordinator_data(online=True, steam_games=games)
         player, coordinator, client = _make_player(data)
+        client.steam_run = AsyncMock(return_value={"appId": 570, "name": "Dota 2"})
 
         await player.async_select_source("Dota 2")
 
         client.steam_run.assert_awaited_once_with(570)
-        assert coordinator.data.steam_running["appId"] == 570
+        assert coordinator.data.steam_running == {"appId": 570, "name": "Dota 2"}
+
+    @pytest.mark.asyncio
+    async def test_launches_game_when_online_not_confirmed(self):
+        """steam_run returns None -- falls back to optimistic update."""
+        games = [{"appId": 570, "name": "Dota 2"}]
+        data = make_coordinator_data(online=True, steam_games=games)
+        player, coordinator, client = _make_player(data)
+        client.steam_run = AsyncMock(return_value=None)
+
+        await player.async_select_source("Dota 2")
+
+        client.steam_run.assert_awaited_once_with(570)
+        assert coordinator.data.steam_running == {"appId": 570, "name": "Dota 2"}
 
     @pytest.mark.asyncio
     async def test_game_not_found_in_list_does_nothing(self):

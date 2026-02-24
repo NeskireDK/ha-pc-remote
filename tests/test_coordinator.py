@@ -311,3 +311,167 @@ class TestPopulateFromSystemState:
         coord._populate_from_system_state(data, state)
 
         assert data.steam_running["appId"] == 570
+
+
+# ---------------------------------------------------------------------------
+# Selection persistence
+# ---------------------------------------------------------------------------
+
+class TestSelectionPersistence:
+    @pytest.mark.asyncio
+    async def test_load_selections_returns_dict_from_store(self):
+        coord = _make_coordinator()
+        coord._selections_store._data = {"mode": "Gaming", "monitor_profile": "TV"}
+        result = await coord.load_selections()
+        assert result == {"mode": "Gaming", "monitor_profile": "TV"}
+
+    @pytest.mark.asyncio
+    async def test_load_selections_returns_empty_dict_when_no_data(self):
+        coord = _make_coordinator()
+        result = await coord.load_selections()
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_persist_selection_saves_to_store(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "Work")
+        stored = await coord._selections_store.async_load()
+        assert stored == {"mode": "Work"}
+
+    @pytest.mark.asyncio
+    async def test_persist_selection_merges_with_existing(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "Work")
+        await coord.persist_selection("monitor_profile", "Desktop")
+        stored = await coord._selections_store.async_load()
+        assert stored == {"mode": "Work", "monitor_profile": "Desktop"}
+
+    @pytest.mark.asyncio
+    async def test_persist_selection_can_clear_value(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "Work")
+        await coord.persist_selection("mode", None)
+        stored = await coord._selections_store.async_load()
+        assert stored["mode"] is None
+
+
+# ---------------------------------------------------------------------------
+# _restore_selections
+# ---------------------------------------------------------------------------
+
+class TestRestoreSelections:
+    @pytest.mark.asyncio
+    async def test_restores_mode_when_in_available_list(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "Gaming")
+        data = PcRemoteData(modes=["Gaming", "Work"])
+        await coord._restore_selections(data)
+        assert data.current_mode == "Gaming"
+
+    @pytest.mark.asyncio
+    async def test_clears_mode_when_not_in_available_list(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "Removed")
+        data = PcRemoteData(modes=["Gaming", "Work"])
+        await coord._restore_selections(data)
+        assert data.current_mode is None
+
+    @pytest.mark.asyncio
+    async def test_restores_monitor_profile_when_in_available_list(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("monitor_profile", "Desktop")
+        data = PcRemoteData(monitor_profiles=["Desktop", "Gaming"])
+        await coord._restore_selections(data)
+        assert data.current_monitor_profile == "Desktop"
+
+    @pytest.mark.asyncio
+    async def test_clears_monitor_profile_when_not_in_available_list(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("monitor_profile", "Removed")
+        data = PcRemoteData(monitor_profiles=["Desktop", "Gaming"])
+        await coord._restore_selections(data)
+        assert data.current_monitor_profile is None
+
+    @pytest.mark.asyncio
+    async def test_audio_change_clears_persisted_mode(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "TV")
+        coord._prev_audio_device = "Speakers"
+
+        data = PcRemoteData(
+            modes=["TV", "Gaming"],
+            current_audio_device="Headphones",
+        )
+        await coord._restore_selections(data)
+
+        assert data.current_mode is None
+        stored = await coord._selections_store.async_load()
+        assert stored["mode"] is None
+
+    @pytest.mark.asyncio
+    async def test_audio_unchanged_keeps_persisted_mode(self):
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "TV")
+        coord._prev_audio_device = "Speakers"
+
+        data = PcRemoteData(
+            modes=["TV", "Gaming"],
+            current_audio_device="Speakers",
+        )
+        await coord._restore_selections(data)
+
+        assert data.current_mode == "TV"
+
+    @pytest.mark.asyncio
+    async def test_first_poll_does_not_clear_mode(self):
+        """On first poll _prev_audio_device is None, should not clear mode."""
+        coord = _make_coordinator()
+        await coord.persist_selection("mode", "TV")
+
+        data = PcRemoteData(
+            modes=["TV", "Gaming"],
+            current_audio_device="Speakers",
+        )
+        await coord._restore_selections(data)
+
+        assert data.current_mode == "TV"
+        assert coord._prev_audio_device == "Speakers"
+
+    @pytest.mark.asyncio
+    async def test_system_state_path_restores_selections(self):
+        """Full _async_update_data via system state restores persisted mode."""
+        client = make_mock_client()
+        client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
+        client.get_system_state.return_value = _full_system_state()
+
+        coord = _make_coordinator(client)
+        await coord.persist_selection("mode", "Gaming")
+        await coord.persist_selection("monitor_profile", "Desktop")
+
+        data = await coord._async_update_data()
+
+        assert data.current_mode == "Gaming"
+        assert data.current_monitor_profile == "Desktop"
+
+    @pytest.mark.asyncio
+    async def test_fallback_path_restores_selections(self):
+        """Full _async_update_data via fallback restores persisted mode."""
+        client = make_mock_client()
+        client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
+        client.get_system_state.side_effect = Exception("no state")
+        client.get_audio_devices.return_value = []
+        client.get_monitor_profiles.return_value = ["Desktop", "Gaming"]
+        client.get_monitors.return_value = []
+        client.get_apps.return_value = []
+        client.get_steam_games.return_value = []
+        client.get_steam_running.return_value = None
+        client.get_modes.return_value = ["Gaming", "Work"]
+
+        coord = _make_coordinator(client)
+        await coord.persist_selection("mode", "Gaming")
+        await coord.persist_selection("monitor_profile", "Desktop")
+
+        data = await coord._async_update_data()
+
+        assert data.current_mode == "Gaming"
+        assert data.current_monitor_profile == "Desktop"

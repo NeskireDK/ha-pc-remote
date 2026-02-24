@@ -284,11 +284,21 @@ class TestSteam:
 
     @pytest.mark.asyncio
     async def test_steam_run_posts_app_id(self):
-        resp = _make_response(200, {})
+        game = {"appId": 1091500, "name": "Cyberpunk 2077"}
+        resp = _make_response(200, {"success": True, "data": game})
         session = _make_session(resp)
         client = _make_client(session)
-        await client.steam_run(1091500)
+        result = await client.steam_run(1091500)
         assert "/api/steam/run/1091500" in session.post.call_args[0][0]
+        assert result["appId"] == 1091500
+
+    @pytest.mark.asyncio
+    async def test_steam_run_returns_none_when_not_confirmed(self):
+        resp = _make_response(200, {"success": True, "data": None})
+        session = _make_session(resp)
+        client = _make_client(session)
+        result = await client.steam_run(1091500)
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_steam_stop_posts_to_stop(self):

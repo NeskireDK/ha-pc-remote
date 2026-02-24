@@ -58,6 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = PcRemoteCoordinator(hass, client, entry.entry_id)
     await coordinator.async_load_steam_cache()
+    await coordinator.load_selections()
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})

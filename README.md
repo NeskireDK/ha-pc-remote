@@ -2,21 +2,20 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
-Home Assistant custom integration for controlling a Windows PC via [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service).
+Home Assistant custom integration for controlling a PC remotely via [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service). Supports Windows (tray app) and Linux (headless daemon).
 
 ## Requirements
 
-- [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service) running on the target Windows PC
-- Home Assistant 2024.1.0+
+- [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service) v1.0+ running on the target PC
+- Home Assistant 2024.6.0+
 
 ## Installation
 
 ### HACS (Recommended)
 
-1. Add this repository as a custom repository in HACS
-2. Install "PC Remote"
-3. Restart Home Assistant
-4. Go to Settings > Integrations > Add > PC Remote
+1. Open HACS → Integrations → Search "PC Remote"
+2. Install and restart Home Assistant
+3. Go to Settings > Integrations > Add > PC Remote
 
 ### Manual
 
@@ -26,8 +25,8 @@ Copy `custom_components/pc_remote/` to your Home Assistant `custom_components/` 
 
 Two ways to add the integration:
 
-- **Zeroconf** -- Auto-discovered on your network. Just confirm and enter the API key.
-- **Manual** -- Enter host, port, and API key from the Windows service.
+- **Zeroconf** — Auto-discovered on your network. Just confirm and enter the API key.
+- **Manual** — Enter host, port, and API key from the service config.
 
 ## Entities
 
@@ -35,6 +34,7 @@ Two ways to add the integration:
 |--------|------|-------------|
 | Online | Binary Sensor | PC connectivity status |
 | Sleep | Button | Put PC to sleep |
+| PC Mode | Select | Apply a named mode (audio + monitors + volume + app) |
 | Audio Output | Select | Switch default audio output device |
 | Volume | Number | Master volume (0-100) |
 | Monitor Profile | Select | Apply a saved `.cfg` monitor profile |
@@ -42,18 +42,22 @@ Two ways to add the integration:
 | Steam | Media Player | Launch Steam games; shows BUFFERING + wakes PC if offline |
 | {App Name} | Switch | Launch/kill configured apps |
 
-App switches are created dynamically based on apps configured in the Windows service.
+App switches are created dynamically based on apps configured in the service. PC Mode options come from the `Modes` config section.
+
+## Blueprints
+
+Two automation blueprints are included:
+
+- **Couch Gaming** — switches PC Mode, wakes the PC, and launches a Steam game in one action
+- **Post-Session Sleep** — when the Steam player goes idle, waits N minutes and sleeps the PC
 
 ## Roadmap
 
-### Wake-and-play (implemented in v0.9.0)
-
-The Steam media player caches the game list locally, so the source list remains populated even when the PC is off and across HA restarts. Selecting a game while the PC is off automatically wakes and launches it.
-
-- [x] When a game is selected and `online = false`, send a WoL magic packet
-- [x] Poll `/api/health` until the service responds (PC is up)
-- [x] Poll `/api/steam/running` until Steam is reachable (Steam may take longer to start than the service)
-- [x] Launch the game via `/api/steam/run/{appId}`
+- [x] Wake-and-play: WoL + poll + Steam launch when PC is off *(v0.9.0)*
+- [x] PC Mode select entity *(v1.0)*
+- [x] Aggregated state coordinator (single poll call) *(v1.0)*
+- [x] Couch Gaming + Post-Session Sleep blueprints *(v1.0)*
+- [ ] User Idle Time sensor *(v1.1)*
 
 ## License
 

@@ -113,10 +113,18 @@ class TestMonitorProfileSelect:
         entity, *_ = _make_entity(PcRemoteMonitorProfileSelect, data)
         assert entity.options == []
 
-    def test_current_option_always_none(self):
-        data = make_coordinator_data(monitor_profiles=["Desktop"])
+    def test_current_option_none_when_not_persisted(self):
+        data = make_coordinator_data(monitor_profiles=["Desktop"], current_monitor_profile=None)
         entity, *_ = _make_entity(PcRemoteMonitorProfileSelect, data)
         assert entity.current_option is None
+
+    def test_current_option_returns_persisted_profile(self):
+        data = make_coordinator_data(
+            monitor_profiles=["Desktop", "Gaming"],
+            current_monitor_profile="Gaming",
+        )
+        entity, *_ = _make_entity(PcRemoteMonitorProfileSelect, data)
+        assert entity.current_option == "Gaming"
 
     def test_unavailable_when_offline(self):
         data = make_coordinator_data(online=False)
@@ -124,14 +132,15 @@ class TestMonitorProfileSelect:
         assert entity.available is False
 
     @pytest.mark.asyncio
-    async def test_select_option_calls_api_and_refreshes(self):
+    async def test_select_option_calls_api_and_persists(self):
         data = make_coordinator_data(monitor_profiles=["Desktop", "Gaming"])
         entity, coordinator, client = _make_entity(PcRemoteMonitorProfileSelect, data)
 
         await entity.async_select_option("Gaming")
 
         client.set_monitor_profile.assert_awaited_once_with("Gaming")
-        coordinator.async_request_refresh.assert_awaited_once()
+        assert coordinator.data.current_monitor_profile == "Gaming"
+        coordinator.persist_selection.assert_awaited_once_with("monitor_profile", "Gaming")
 
     @pytest.mark.asyncio
     async def test_select_option_api_failure_propagates(self):
@@ -243,14 +252,15 @@ class TestModeSelect:
         assert entity.available is False
 
     @pytest.mark.asyncio
-    async def test_select_option_calls_api_and_stores_mode(self):
+    async def test_select_option_calls_api_and_persists_mode(self):
         data = make_coordinator_data(modes=["Gaming", "Work"])
         entity, coordinator, client = _make_entity(PcRemoteModeSelect, data)
 
         await entity.async_select_option("Gaming")
 
         client.set_mode.assert_awaited_once_with("Gaming")
-        assert entity.current_option == "Gaming"
+        assert coordinator.data.current_mode == "Gaming"
+        coordinator.persist_selection.assert_awaited_once_with("mode", "Gaming")
 
     @pytest.mark.asyncio
     async def test_select_option_updates_current_mode(self):
@@ -258,10 +268,10 @@ class TestModeSelect:
         entity, coordinator, client = _make_entity(PcRemoteModeSelect, data)
 
         await entity.async_select_option("Work")
-        assert entity.current_option == "Work"
+        assert coordinator.data.current_mode == "Work"
 
         await entity.async_select_option("Gaming")
-        assert entity.current_option == "Gaming"
+        assert coordinator.data.current_mode == "Gaming"
 
     @pytest.mark.asyncio
     async def test_select_option_api_failure_propagates(self):
