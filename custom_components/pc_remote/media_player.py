@@ -49,7 +49,9 @@ class PcRemoteSteamPlayer(
     _attr_translation_key = "steam"
     _attr_icon = "mdi:steam"
     _attr_supported_features = (
-        MediaPlayerEntityFeature.SELECT_SOURCE
+        MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.SELECT_SOURCE
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.BROWSE_MEDIA
         | MediaPlayerEntityFeature.PLAY_MEDIA
@@ -141,6 +143,26 @@ class PcRemoteSteamPlayer(
                 await self._launch_or_wake(app_id, source)
                 return
         _LOGGER.warning("Steam game not found in list: %s", source)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Wake the PC via Wake-on-LAN."""
+        mac = self._entry.data.get(CONF_MAC_ADDRESS)
+        if not mac:
+            _LOGGER.error("MAC address not configured, cannot send WoL packet")
+            return
+        try:
+            await self.hass.async_add_executor_job(send_magic_packet, mac)
+        except (ValueError, OSError) as err:
+            _LOGGER.error("Failed to send WoL packet: %s", err)
+            return
+        self.coordinator.set_power_state(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Put the PC to sleep."""
+        await self._client.sleep()
+        self.coordinator.set_power_state(False)
+        self.async_write_ha_state()
 
     async def async_media_stop(self) -> None:
         """Stop the currently running game."""
