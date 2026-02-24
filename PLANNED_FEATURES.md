@@ -131,22 +131,22 @@ still idle, then sleep the PC. Closes the power-saving loop without manual actio
 
 - [x] `blueprints/automation/pc_remote/post_session_sleep.yaml` *(integration)*
 
-### 5. Media Browser for Steam Games + Apps
+### 5. Media Browser for Steam Games + Apps *(done in v1.0.2)*
 
 `select_source` works via developer tools / service calls but the dropdown only shows
 in the entity detail dialog — not on dashboard cards. Add `browse_media` + `play_media`
 support so Steam games (and later apps) appear in the HA media browser with thumbnails
 and hierarchical navigation.
 
-- [ ] Integration: implement `async_browse_media()` returning `BrowseMedia` tree *(integration)*
-- [ ] Integration: implement `async_play_media()` to launch games/apps *(integration)*
-- [ ] Integration: add `BROWSE_MEDIA` + `PLAY_MEDIA` feature flags *(integration)*
-- [ ] Integration: add tests for browse/play media *(integration)*
+- [x] Integration: implement `async_browse_media()` returning `BrowseMedia` tree *(integration)*
+- [x] Integration: implement `async_play_media()` to launch games/apps *(integration)*
+- [x] Integration: add `BROWSE_MEDIA` + `PLAY_MEDIA` feature flags *(integration)*
+- [x] Integration: add tests for browse/play media *(integration)*
 
-### 6. User Idle Time Sensor
+### 6. User Idle Time Sensor *(done in v1.0.2)*
 
 `GetLastInputInfo` Win32 API → seconds since last keyboard/mouse input.
 Guards the sleep blueprint against sleeping a PC that someone is actively using at the desk.
 
-- [ ] Service: expose via `GET /api/system/idle` *(service)*
-- [ ] Integration: `sensor` entity "Idle Time" (device class `duration`) *(integration)*
+- [x] Service: expose via `GET /api/system/idle` *(service)*
+- [x] Integration: `sensor` entity "Idle Time" (device class `duration`) *(integration)*

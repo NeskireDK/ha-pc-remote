@@ -73,6 +73,7 @@ def make_coordinator_data(**kwargs) -> PcRemoteData:
         modes=["Gaming", "Work", "TV"],
         current_mode=None,
         current_monitor_profile=None,
+        idle_seconds=30,
     )
     defaults.update(kwargs)
     return PcRemoteData(**defaults)

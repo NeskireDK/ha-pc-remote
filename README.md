@@ -39,7 +39,8 @@ Two ways to add the integration:
 | Volume | Number | Master volume (0-100) |
 | Monitor Profile | Select | Apply a saved `.cfg` monitor profile |
 | Active Monitor | Select | Switch to a single monitor (solo mode) |
-| Steam | Media Player | Launch Steam games; shows BUFFERING + wakes PC if offline |
+| Steam | Media Player | Launch Steam games via source list or media browser; wakes PC if offline |
+| Idle Time | Sensor | Seconds since last keyboard/mouse input on the PC |
 | {App Name} | Switch | Launch/kill configured apps |
 
 App switches are created dynamically based on apps configured in the service. PC Mode options come from the `Modes` config section.
@@ -57,7 +58,8 @@ Two automation blueprints are included:
 - [x] PC Mode select entity *(v1.0)*
 - [x] Aggregated state coordinator (single poll call) *(v1.0)*
 - [x] Couch Gaming + Post-Session Sleep blueprints *(v1.0)*
-- [ ] User Idle Time sensor *(v1.1)*
+- [x] User Idle Time sensor *(v1.0.2)*
+- [x] Steam media browser (browse + play) *(v1.0.2)*
 
 ## License
 

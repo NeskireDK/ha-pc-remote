@@ -9,6 +9,9 @@
       "active_monitor": { "name": "Active Monitor" },
       "pc_mode": { "name": "PC Mode" }
     },
+    "sensor": {
+      "idle_time": { "name": "Idle Time" }
+    },
     "number": {
       "volume": { "name": "Volume" }
     },

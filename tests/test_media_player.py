@@ -286,3 +286,104 @@ class TestEntityAttributes:
         player, *_ = _make_player()
         assert player._attr_supported_features & MediaPlayerEntityFeature.SELECT_SOURCE
         assert player._attr_supported_features & MediaPlayerEntityFeature.STOP
+
+    def test_supported_features_include_browse_and_play_media(self):
+        from homeassistant.components.media_player import MediaPlayerEntityFeature
+        player, *_ = _make_player()
+        assert player._attr_supported_features & MediaPlayerEntityFeature.BROWSE_MEDIA
+        assert player._attr_supported_features & MediaPlayerEntityFeature.PLAY_MEDIA
+
+
+# ---------------------------------------------------------------------------
+# async_browse_media
+# ---------------------------------------------------------------------------
+
+class TestBrowseMedia:
+    @pytest.mark.asyncio
+    async def test_returns_root_with_children(self):
+        games = [
+            {"appId": 570, "name": "Dota 2"},
+            {"appId": 1091500, "name": "Cyberpunk 2077"},
+        ]
+        data = make_coordinator_data(steam_games=games)
+        player, *_ = _make_player(data)
+
+        result = await player.async_browse_media()
+
+        assert result.title == "Steam Games"
+        assert result.can_expand is True
+        assert result.can_play is False
+        assert len(result.children) == 2
+
+    @pytest.mark.asyncio
+    async def test_children_have_game_properties(self):
+        games = [{"appId": 570, "name": "Dota 2"}]
+        data = make_coordinator_data(steam_games=games)
+        player, *_ = _make_player(data)
+
+        result = await player.async_browse_media()
+        child = result.children[0]
+
+        assert child.title == "Dota 2"
+        assert child.media_content_id == "570"
+        assert child.can_play is True
+        assert child.can_expand is False
+        assert "570" in child.thumbnail
+
+    @pytest.mark.asyncio
+    async def test_empty_games_returns_empty_children(self):
+        data = make_coordinator_data(steam_games=[])
+        player, *_ = _make_player(data)
+
+        result = await player.async_browse_media()
+
+        assert result.children == []
+
+
+# ---------------------------------------------------------------------------
+# async_play_media
+# ---------------------------------------------------------------------------
+
+class TestPlayMedia:
+    @pytest.mark.asyncio
+    async def test_launches_game_by_app_id(self):
+        games = [{"appId": 570, "name": "Dota 2"}]
+        data = make_coordinator_data(online=True, steam_games=games)
+        player, coordinator, client = _make_player(data)
+        client.steam_run = AsyncMock(return_value={"appId": 570, "name": "Dota 2"})
+
+        await player.async_play_media("game", "570")
+
+        client.steam_run.assert_awaited_once_with(570)
+        assert coordinator.data.steam_running == {"appId": 570, "name": "Dota 2"}
+
+    @pytest.mark.asyncio
+    async def test_invalid_media_id_does_nothing(self):
+        player, coordinator, client = _make_player()
+
+        await player.async_play_media("game", "not-a-number")
+
+        client.steam_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_offline_triggers_wake_and_play(self):
+        games = [{"appId": 570, "name": "Dota 2"}]
+        data = make_coordinator_data(online=False, steam_games=games)
+        player, coordinator, client = _make_player(data)
+        coordinator.hass.async_create_task = MagicMock()
+
+        await player.async_play_media("game", "570")
+
+        assert player._wake_target == {"appId": 570, "name": "Dota 2"}
+        coordinator.hass.async_create_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_launch_failure_does_not_raise(self):
+        games = [{"appId": 570, "name": "Dota 2"}]
+        data = make_coordinator_data(online=True, steam_games=games)
+        player, coordinator, client = _make_player(data)
+        client.steam_run.side_effect = CannotConnectError("refused")
+
+        await player.async_play_media("game", "570")
+
+        assert coordinator.data.steam_running is None
