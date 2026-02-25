@@ -48,7 +48,7 @@ class TestIdleSensor:
 
     def test_unique_id(self):
         sensor = self._make_sensor()
-        assert sensor.unique_id == "test_entry_id_idle_time"
+        assert sensor.unique_id == "test_entry_id_idle_duration"
 
     def test_device_class(self):
         from homeassistant.components.sensor import SensorDeviceClass

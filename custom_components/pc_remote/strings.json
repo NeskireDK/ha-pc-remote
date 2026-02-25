@@ -10,7 +10,7 @@
       "pc_mode": { "name": "PC Mode" }
     },
     "sensor": {
-      "idle_time": { "name": "Idle Time" }
+      "idle_duration": { "name": "Idle Duration" }
     },
     "number": {
       "volume": { "name": "Volume" }

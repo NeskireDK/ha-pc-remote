@@ -32,10 +32,10 @@ async def async_setup_entry(
 class PcRemoteIdleSensor(
     CoordinatorEntity[PcRemoteCoordinator], SensorEntity
 ):
-    """Sensor for user idle time on the remote PC."""
+    """Sensor for user idle duration on the remote PC."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "idle_time"
+    _attr_translation_key = "idle_duration"
     _attr_device_class = SensorDeviceClass.DURATION
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTime.SECONDS
@@ -47,10 +47,10 @@ class PcRemoteIdleSensor(
         coordinator: PcRemoteCoordinator,
         entry: ConfigEntry,
     ) -> None:
-        """Initialize the idle time sensor."""
+        """Initialize the idle duration sensor."""
         super().__init__(coordinator)
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_idle_time"
+        self._attr_unique_id = f"{entry.entry_id}_idle_duration"
 
     @property
     def device_info(self) -> DeviceInfo:
