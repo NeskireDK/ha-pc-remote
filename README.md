@@ -39,7 +39,7 @@ Two ways to add the integration:
 | Volume | Number | Master volume (0-100) |
 | Monitor Profile | Select | Apply a saved `.cfg` monitor profile |
 | Active Monitor | Select | Switch to a single monitor (solo mode) |
-| Steam | Media Player | Launch Steam games via source list or media browser; wakes PC if offline |
+| Steam | Media Player | Launch Steam games via source list or media browser; turn on wakes PC via WoL, turn off sleeps PC |
 | Idle Time | Sensor | Seconds since last keyboard/mouse input on the PC |
 | {App Name} | Switch | Launch/kill configured apps |
 
@@ -60,6 +60,8 @@ Two automation blueprints are included:
 - [x] Couch Gaming + Post-Session Sleep blueprints *(v1.0)*
 - [x] User Idle Time sensor *(v1.0.2)*
 - [x] Steam media browser (browse + play) *(v1.0.2)*
+- [x] Media player turn on (WoL) / turn off (sleep) *(v1.0.4)*
+- [x] Steam poster images + Top 20 sorting fix *(v1.0.5)*
 
 ## License
 
