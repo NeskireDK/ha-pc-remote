@@ -39,8 +39,8 @@ Two ways to add the integration:
 | Volume | Number | Master volume (0-100) |
 | Monitor Profile | Select | Apply a saved `.cfg` monitor profile |
 | Active Monitor | Select | Switch to a single monitor (solo mode) |
-| Steam | Media Player | Launch Steam games via source list or media browser; turn on wakes PC via WoL, turn off sleeps PC |
-| Idle Time | Sensor | Seconds since last keyboard/mouse input on the PC |
+| Steam | Media Player | Launch Steam + non-Steam games via source list or media browser; artwork thumbnails from local cache; turn on wakes PC via WoL, turn off sleeps PC |
+| Idle Duration | Sensor | Seconds since last keyboard/mouse input on the PC |
 | {App Name} | Switch | Launch/kill configured apps |
 
 App switches are created dynamically based on apps configured in the service. PC Mode options come from the `Modes` config section.
