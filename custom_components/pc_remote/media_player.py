@@ -134,6 +134,13 @@ class PcRemoteSteamPlayer(
         return f"http://{host}:{port}/api/steam/artwork"
 
     @property
+    def _artwork_base_url(self) -> str:
+        """Return the base URL for the service artwork endpoint."""
+        host = self._entry.data[CONF_HOST]
+        port = self._entry.data[CONF_PORT]
+        return f"http://{host}:{port}/api/steam/artwork"
+
+    @property
     def media_image_url(self) -> str | None:
         """Return artwork URL served from the PC's local Steam cache."""
         running = self.coordinator.data.steam_running
