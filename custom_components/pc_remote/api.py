@@ -448,6 +448,28 @@ class PcRemoteClient:
                 f"Cannot connect to {self._base_url}"
             ) from err
 
+    async def get_steam_bindings(self) -> dict:
+        """Get Steam game-to-PC-mode bindings."""
+        try:
+            async with self._session.get(
+                f"{self._base_url}/api/steam/bindings",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+                result = await resp.json()
+                if not result.get("success", True):
+                    msg = result.get("message", "Unknown error")
+                    _LOGGER.warning("API call failed: %s", msg)
+                    raise CannotConnectError(f"API error: {msg}")
+                return result.get("data", {})
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
     async def steam_stop(self) -> None:
         """Stop the currently running Steam game."""
         try:

@@ -46,6 +46,7 @@ class PcRemoteData:
     current_mode: str | None = None
     current_monitor_profile: str | None = None
     idle_seconds: int | None = None
+    steam_bindings: dict | None = None
 
 
 class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
@@ -202,6 +203,11 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch modes: %s", err)
 
+        try:
+            data.steam_bindings = await self.client.get_steam_bindings()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed to fetch steam bindings: %s", err)
+
         await self._restore_selections(data)
         return data
 
@@ -255,3 +261,4 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         data.steam_running = state.get("runningGame")
         data.modes = state.get("modes", [])
         data.idle_seconds = state.get("idleSeconds")
+        data.steam_bindings = state.get("steamBindings")

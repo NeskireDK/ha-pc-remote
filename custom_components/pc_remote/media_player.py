@@ -112,7 +112,19 @@ class PcRemoteSteamPlayer(
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes."""
         target = self._wake_target or self.coordinator.data.steam_running
-        return {"app_id": target.get("appId")} if target else None
+        attrs: dict[str, Any] = {}
+        if target:
+            attrs["app_id"] = target.get("appId")
+            # Resolve the PC mode binding for the current/target game
+            bindings = self.coordinator.data.steam_bindings
+            if bindings and target.get("appId") is not None:
+                app_id_str = str(target["appId"])
+                game_bindings = bindings.get("gamePcModeBindings", {})
+                if app_id_str in game_bindings:
+                    attrs["game_pc_mode_binding"] = game_bindings[app_id_str]
+                elif bindings.get("defaultPcMode"):
+                    attrs["game_pc_mode_binding"] = bindings["defaultPcMode"]
+        return attrs if attrs else None
 
     @property
     def _artwork_base_url(self) -> str:

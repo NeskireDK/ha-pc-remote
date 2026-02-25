@@ -162,6 +162,51 @@ class TestExtraAttributes:
         player, *_ = _make_player(data)
         assert player.extra_state_attributes is None
 
+    def test_game_pc_mode_binding_from_per_game(self):
+        data = make_coordinator_data(
+            steam_running={"appId": 730, "name": "CS2"},
+            steam_bindings={
+                "defaultPcMode": "couch",
+                "gamePcModeBindings": {"730": "desktop"},
+            },
+        )
+        player, *_ = _make_player(data)
+        attrs = player.extra_state_attributes
+        assert attrs["game_pc_mode_binding"] == "desktop"
+
+    def test_game_pc_mode_binding_falls_back_to_default(self):
+        data = make_coordinator_data(
+            steam_running={"appId": 999, "name": "Other Game"},
+            steam_bindings={
+                "defaultPcMode": "couch",
+                "gamePcModeBindings": {},
+            },
+        )
+        player, *_ = _make_player(data)
+        attrs = player.extra_state_attributes
+        assert attrs["game_pc_mode_binding"] == "couch"
+
+    def test_game_pc_mode_binding_missing_when_no_bindings(self):
+        data = make_coordinator_data(
+            steam_running={"appId": 570, "name": "Dota 2"},
+            steam_bindings=None,
+        )
+        player, *_ = _make_player(data)
+        attrs = player.extra_state_attributes
+        assert "game_pc_mode_binding" not in attrs
+
+    def test_game_pc_mode_binding_absent_when_no_default_and_no_per_game(self):
+        data = make_coordinator_data(
+            steam_running={"appId": 570, "name": "Dota 2"},
+            steam_bindings={
+                "defaultPcMode": "",
+                "gamePcModeBindings": {},
+            },
+        )
+        player, *_ = _make_player(data)
+        attrs = player.extra_state_attributes
+        assert "game_pc_mode_binding" not in attrs
+
 
 # ---------------------------------------------------------------------------
 # async_select_source
