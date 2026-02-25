@@ -54,14 +54,7 @@ Two automation blueprints are included:
 
 ## Roadmap
 
-- [x] Wake-and-play: WoL + poll + Steam launch when PC is off *(v0.9.0)*
-- [x] PC Mode select entity *(v1.0)*
-- [x] Aggregated state coordinator (single poll call) *(v1.0)*
-- [x] Couch Gaming + Post-Session Sleep blueprints *(v1.0)*
-- [x] User Idle Time sensor *(v1.0.2)*
-- [x] Steam media browser (browse + play) *(v1.0.2)*
-- [x] Media player turn on (WoL) / turn off (sleep) *(v1.0.4)*
-- [x] Steam poster images + Top 20 sorting fix *(v1.0.5)*
+See [PLANNED_FEATURES.md](https://github.com/NeskireDK/ha-pc-remote-service/blob/main/PLANNED_FEATURES.md) in the service repo for bugs, planned features, and version roadmap covering both repositories.
 
 ## License
 
