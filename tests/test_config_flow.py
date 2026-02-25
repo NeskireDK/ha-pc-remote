@@ -352,6 +352,25 @@ class TestReconfigureStep:
         assert result["errors"] == {"base": "invalid_auth"}
 
     @pytest.mark.asyncio
+    async def test_unknown_error(self):
+        flow = self._setup_flow()
+
+        with patch(
+            "custom_components.pc_remote.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.pc_remote.config_flow.PcRemoteClient"
+        ) as mock_cls:
+            mock_cls.return_value.get_health = AsyncMock(
+                side_effect=RuntimeError("boom")
+            )
+            result = await flow.async_step_reconfigure(
+                {CONF_HOST: "1.2.3.4", CONF_PORT: 5000, CONF_API_KEY: "key"}
+            )
+
+        assert result["type"] == "form"
+        assert result["errors"] == {"base": "unknown"}
+
+    @pytest.mark.asyncio
     async def test_same_host_updates_without_mac_reselect(self):
         flow = self._setup_flow()
 
@@ -369,6 +388,10 @@ class TestReconfigureStep:
 
         assert result["type"] == "abort"
         assert result["reason"] == "reconfigure_successful"
+        call_data = flow.async_update_reload_and_abort.call_args[1]["data"]
+        assert call_data[CONF_PORT] == 5001
+        assert call_data[CONF_API_KEY] == "new-key"
+        assert call_data[CONF_MAC_ADDRESS] == "AA:BB:CC:DD:EE:FF"  # preserved
 
     @pytest.mark.asyncio
     async def test_host_changed_triggers_mac_reselect(self):
@@ -476,6 +499,23 @@ class TestReconfigureSelectMacStep:
 
         assert result["type"] == "form"
         assert result["errors"] == {"base": "cannot_connect"}
+
+    @pytest.mark.asyncio
+    async def test_invalid_auth(self):
+        flow = self._setup_flow()
+
+        with patch(
+            "custom_components.pc_remote.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.pc_remote.config_flow.PcRemoteClient"
+        ) as mock_cls:
+            mock_cls.return_value.get_health = AsyncMock(
+                side_effect=InvalidAuthError
+            )
+            result = await flow.async_step_reconfigure_select_mac(user_input=None)
+
+        assert result["type"] == "form"
+        assert result["errors"] == {"base": "invalid_auth"}
 
     @pytest.mark.asyncio
     async def test_no_macs_shows_error(self):
@@ -660,6 +700,27 @@ class TestZeroconfStep:
 
         assert result["type"] == "form"
         assert result["errors"] == {"base": "cannot_connect"}
+
+    @pytest.mark.asyncio
+    async def test_zeroconf_confirm_invalid_auth(self):
+        flow = _make_flow()
+        flow._discovered_host = "192.168.1.50"
+        flow._discovered_port = 5000
+
+        with patch(
+            "custom_components.pc_remote.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.pc_remote.config_flow.PcRemoteClient"
+        ) as mock_cls:
+            mock_cls.return_value.get_health = AsyncMock(
+                side_effect=InvalidAuthError
+            )
+            result = await flow.async_step_zeroconf_confirm(
+                {CONF_API_KEY: "bad-key"}
+            )
+
+        assert result["type"] == "form"
+        assert result["errors"] == {"base": "invalid_auth"}
 
     @pytest.mark.asyncio
     async def test_zeroconf_bytes_machine_name(self):

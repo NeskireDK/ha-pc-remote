@@ -216,7 +216,7 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         try:
             health = await client.get_health()
         except CannotConnectError:
-            _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
+            _LOGGER.debug("Failed to fetch MAC addresses: service unreachable")
             errors["base"] = "cannot_connect"
         except InvalidAuthError:
             errors["base"] = "invalid_auth"
