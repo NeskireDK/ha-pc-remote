@@ -13,7 +13,8 @@
       "idle_duration": { "name": "Idle Duration" }
     },
     "number": {
-      "volume": { "name": "Volume" }
+      "volume": { "name": "Volume" },
+      "auto_sleep": { "name": "Auto-Sleep Timeout" }
     },
     "switch": {
       "power": { "name": "Power" }

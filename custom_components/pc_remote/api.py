@@ -80,6 +80,23 @@ class PcRemoteClient:
                 f"Cannot connect to {self._base_url}"
             ) from err
 
+    async def set_power_config(self, auto_sleep_minutes: int) -> None:
+        """Set power configuration (auto-sleep timeout) on the service."""
+        try:
+            async with self._session.put(
+                f"{self._base_url}/api/system/power/",
+                headers=self._headers,
+                json={"autoSleepAfterMinutes": auto_sleep_minutes},
+                timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status == 401:
+                    raise InvalidAuthError("Invalid API key")
+                resp.raise_for_status()
+        except (aiohttp.ClientConnectorError, aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise CannotConnectError(
+                f"Cannot connect to {self._base_url}"
+            ) from err
+
     async def get_modes(self) -> list[str]:
         """Get available PC modes."""
         try:

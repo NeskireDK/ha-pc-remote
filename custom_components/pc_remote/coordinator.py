@@ -48,6 +48,7 @@ class PcRemoteData:
     idle_seconds: int | None = None
     steam_bindings: dict | None = None
     steam_ready: bool | None = None
+    auto_sleep_minutes: int | None = None
 
 
 class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
@@ -264,3 +265,4 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         data.idle_seconds = state.get("idleSeconds")
         data.steam_bindings = state.get("steamBindings")
         data.steam_ready = state.get("steamReady")
+        data.auto_sleep_minutes = state.get("autoSleepAfterMinutes")

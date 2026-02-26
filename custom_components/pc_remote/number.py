@@ -23,7 +23,10 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator: PcRemoteCoordinator = data["coordinator"]
     client: PcRemoteClient = data["client"]
-    async_add_entities([PcRemoteVolumeNumber(coordinator, client, entry)])
+    async_add_entities([
+        PcRemoteVolumeNumber(coordinator, client, entry),
+        PcRemoteAutoSleepNumber(coordinator, client, entry),
+    ])
 
 
 class PcRemoteVolumeNumber(
@@ -73,4 +76,56 @@ class PcRemoteVolumeNumber(
         """Set the volume level."""
         await self._client.set_volume(int(value))
         self.coordinator.data.volume = int(value)
+        self.async_write_ha_state()
+
+
+class PcRemoteAutoSleepNumber(
+    CoordinatorEntity[PcRemoteCoordinator], NumberEntity
+):
+    """Number entity for configuring auto-sleep timeout."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "auto_sleep"
+    _attr_icon = "mdi:sleep"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 480
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "min"
+
+    def __init__(
+        self,
+        coordinator: PcRemoteCoordinator,
+        client: PcRemoteClient,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the number entity."""
+        super().__init__(coordinator)
+        self._client = client
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_auto_sleep"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info from latest coordinator data."""
+        return build_device_info(
+            self._entry,
+            machine_name=self.coordinator.data.machine_name,
+            sw_version=self.coordinator.data.service_version,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Available only when the PC is online."""
+        return super().available and self.coordinator.data.online
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current auto-sleep timeout in minutes."""
+        return self.coordinator.data.auto_sleep_minutes
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the auto-sleep timeout."""
+        minutes = int(value)
+        await self._client.set_power_config(minutes)
+        self.coordinator.data.auto_sleep_minutes = minutes
         self.async_write_ha_state()

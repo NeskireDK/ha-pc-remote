@@ -75,6 +75,7 @@ def make_coordinator_data(**kwargs) -> PcRemoteData:
         current_monitor_profile=None,
         idle_seconds=30,
         steam_bindings=None,
+        auto_sleep_minutes=30,
     )
     defaults.update(kwargs)
     return PcRemoteData(**defaults)
@@ -130,6 +131,7 @@ def make_mock_client() -> MagicMock:
     client.get_modes = AsyncMock(return_value=[])
     client.set_mode = AsyncMock()
     client.sleep = AsyncMock()
+    client.set_power_config = AsyncMock()
     client.test_connection = AsyncMock(return_value=True)
     return client
 
