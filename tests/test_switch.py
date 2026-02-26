@@ -140,13 +140,14 @@ class TestPowerSwitchTurnOff:
         coordinator.set_power_state.assert_called_once_with(False)
 
     @pytest.mark.asyncio
-    async def test_turn_off_propagates_cannot_connect(self):
+    async def test_turn_off_swallows_cannot_connect(self):
         data = make_coordinator_data(online=True)
         switch, coordinator, client = _make_power_switch(data)
         client.sleep.side_effect = CannotConnectError("refused")
 
-        with pytest.raises(CannotConnectError):
-            await switch.async_turn_off()
+        await switch.async_turn_off()  # must not raise
+
+        coordinator.set_power_state.assert_called_once_with(False)
 
 
 # ---------------------------------------------------------------------------
