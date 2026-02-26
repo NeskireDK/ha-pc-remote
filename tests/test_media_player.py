@@ -133,13 +133,18 @@ class TestMediaImage:
         assert "570" in url
         assert "/api/steam/artwork/" in url
 
-    def test_image_url_none_when_no_game(self):
+    def test_image_url_steam_logo_when_idle(self):
         data = make_coordinator_data(steam_running=None)
         player, *_ = _make_player(data)
-        assert player.media_image_url is None
+        assert player.media_image_url == "https://store.steampowered.com/public/shared/images/header/logo_steam_steam.png"
 
-    def test_image_not_remotely_accessible(self):
-        data = make_coordinator_data()
+    def test_image_remotely_accessible_when_idle(self):
+        data = make_coordinator_data(steam_running=None)
+        player, *_ = _make_player(data)
+        assert player.media_image_remotely_accessible is True
+
+    def test_image_not_remotely_accessible_when_game_running(self):
+        data = make_coordinator_data(steam_running={"appId": 570, "name": "Dota 2"})
         player, *_ = _make_player(data)
         assert player.media_image_remotely_accessible is False
 
@@ -301,7 +306,8 @@ class TestTurnOnOff:
 
         await player.async_turn_on()
 
-        coordinator.hass.async_add_executor_job.assert_awaited_once()
+        # Sustained WoL loop sends one packet per second for 20 s
+        assert coordinator.hass.async_add_executor_job.await_count >= 1
         coordinator.set_power_state.assert_called_once_with(True)
         player.async_write_ha_state.assert_called_once()
 
@@ -325,7 +331,8 @@ class TestTurnOnOff:
 
         await player.async_turn_on()
 
-        coordinator.set_power_state.assert_not_called()
+        # set_power_state is called before sending WoL — error in WoL does not prevent it
+        coordinator.set_power_state.assert_called_once_with(True)
 
     @pytest.mark.asyncio
     async def test_turn_off_calls_sleep_and_sets_power_state(self):

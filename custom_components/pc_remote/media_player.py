@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -19,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 from wakeonlan import send_magic_packet
 
 from .api import CannotConnectError, PcRemoteClient
@@ -70,6 +72,8 @@ class PcRemoteSteamPlayer(
         self._attr_unique_id = f"{entry.entry_id}_steam"
         self._wake_target: dict | None = None
         self._wake_task: asyncio.Task | None = None
+        self._stop_issued_at: datetime | None = None
+        self._last_playing: dict | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -80,6 +84,12 @@ class PcRemoteSteamPlayer(
             sw_version=self.coordinator.data.service_version,
         )
 
+    def _in_stop_hold_window(self) -> bool:
+        """Return True if we are within 30 s of a stop command being issued."""
+        if self._stop_issued_at is None:
+            return False
+        return (dt_util.utcnow() - self._stop_issued_at).total_seconds() < 30
+
     @property
     def state(self) -> MediaPlayerState:
         """Return the state of the media player."""
@@ -88,19 +98,31 @@ class PcRemoteSteamPlayer(
         if not self.coordinator.data.online:
             return MediaPlayerState.OFF
         if self.coordinator.data.steam_running:
+            self._last_playing = self.coordinator.data.steam_running
+            return MediaPlayerState.PLAYING
+        # Hold optimistic playing state for 30 s after a stop command
+        if self._in_stop_hold_window():
             return MediaPlayerState.PLAYING
         return MediaPlayerState.IDLE
 
     @property
+    def _effective_running(self) -> dict | None:
+        """Return the running game, using last known game during stop hold window."""
+        return (
+            self.coordinator.data.steam_running
+            or (self._last_playing if self._in_stop_hold_window() else None)
+        )
+
+    @property
     def media_title(self) -> str | None:
         """Return the title of the currently playing game."""
-        target = self._wake_target or self.coordinator.data.steam_running
+        target = self._wake_target or self._effective_running
         return target.get("name") if target else None
 
     @property
     def source(self) -> str | None:
         """Return the current game as the source."""
-        target = self._wake_target or self.coordinator.data.steam_running
+        target = self._wake_target or self._effective_running
         return target.get("name") if target else None
 
     @property
@@ -111,7 +133,7 @@ class PcRemoteSteamPlayer(
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra state attributes."""
-        target = self._wake_target or self.coordinator.data.steam_running
+        target = self._wake_target or self._effective_running
         attrs: dict[str, Any] = {}
         if target:
             attrs["app_id"] = target.get("appId")
@@ -136,15 +158,17 @@ class PcRemoteSteamPlayer(
     @property
     def media_image_url(self) -> str | None:
         """Return artwork URL served from the PC's local Steam cache."""
-        running = self.coordinator.data.steam_running
+        running = self._effective_running
         if running and (app_id := running.get("appId")):
             return f"{self._artwork_base_url}/{app_id}"
+        if self.state == MediaPlayerState.IDLE:
+            return "https://store.steampowered.com/public/shared/images/header/logo_steam_steam.png"
         return None
 
     @property
     def media_image_remotely_accessible(self) -> bool:
-        """Image is on the LAN service, not a public URL."""
-        return False
+        """Image is on the LAN service, not a public URL — except Steam logo."""
+        return self.state == MediaPlayerState.IDLE
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel any pending wake-and-play task on removal."""
@@ -163,19 +187,26 @@ class PcRemoteSteamPlayer(
                 return
         _LOGGER.warning("Steam game not found in list: %s", source)
 
+    async def _send_wol_sustained(self, mac: str, duration: int = 20, interval: int = 1) -> None:
+        """Send WoL magic packets repeatedly for `duration` seconds."""
+        end_time = dt_util.utcnow().timestamp() + duration
+        while dt_util.utcnow().timestamp() < end_time:
+            try:
+                await self.hass.async_add_executor_job(send_magic_packet, mac)
+            except (ValueError, OSError) as err:
+                _LOGGER.error("Failed to send WoL packet: %s", err)
+                return
+            await asyncio.sleep(interval)
+
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Wake the PC via Wake-on-LAN."""
+        """Wake the PC via Wake-on-LAN (sustained 20 s retry loop)."""
         mac = self._entry.data.get(CONF_MAC_ADDRESS)
         if not mac:
             _LOGGER.error("MAC address not configured, cannot send WoL packet")
             return
-        try:
-            await self.hass.async_add_executor_job(send_magic_packet, mac)
-        except (ValueError, OSError) as err:
-            _LOGGER.error("Failed to send WoL packet: %s", err)
-            return
         self.coordinator.set_power_state(True)
         self.async_write_ha_state()
+        await self._send_wol_sustained(mac)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Put the PC to sleep."""
@@ -190,10 +221,10 @@ class PcRemoteSteamPlayer(
         """Stop the currently running game."""
         if not self.coordinator.data.online:
             return
+        self._stop_issued_at = dt_util.utcnow()
         await self._client.steam_stop()
         self.coordinator.data.steam_running = None
         self.async_write_ha_state()
-        await self.coordinator.async_request_refresh()
 
     async def async_browse_media(
         self,
@@ -287,10 +318,7 @@ class PcRemoteSteamPlayer(
 
         # Capture target — coordinator refreshes must not clear this
         target = {"appId": app_id, "name": source}
-        try:
-            await self.hass.async_add_executor_job(send_magic_packet, mac)
-        except (ValueError, OSError) as err:
-            _LOGGER.error("Failed to send WoL packet: %s", err)
+        await self._send_wol_sustained(mac)
 
         # Poll /api/health until service responds (max 3 minutes, every 5s)
         online = False

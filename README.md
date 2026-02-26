@@ -13,9 +13,15 @@ Home Assistant custom integration for controlling a PC remotely via [ha-pc-remot
 
 ### HACS (Recommended)
 
-1. Open HACS → Integrations → Search "PC Remote"
-2. Install and restart Home Assistant
-3. Go to Settings > Integrations > Add > PC Remote
+1. Open HACS → Integrations → ⋮ → Custom Repositories → add the repo URL → Integration category
+
+```
+https://github.com/NeskireDK/ha-pc-remote
+```
+
+2. Search "PC Remote" and install
+3. Restart Home Assistant
+4. Go to Settings > Integrations > Add > PC Remote
 
 ### Manual
 
