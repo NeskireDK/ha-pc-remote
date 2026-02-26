@@ -6,7 +6,7 @@ Home Assistant custom integration for controlling a PC remotely via [ha-pc-remot
 
 ## Requirements
 
-- [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service) v1.0+ running on the target PC
+- [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service) v1.2.2+ running on the target PC
 - Home Assistant 2024.6.0+
 
 ## Installation
