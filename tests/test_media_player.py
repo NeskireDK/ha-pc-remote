@@ -379,6 +379,66 @@ class TestMediaStop:
 
         client.steam_stop.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_stop_sets_stop_issued_at(self):
+        """async_media_stop records the timestamp so the hold window is active."""
+        data = make_coordinator_data(online=True, steam_running={"appId": 570, "name": "Dota 2"})
+        player, coordinator, client = _make_player(data)
+
+        assert player._stop_issued_at is None
+        await player.async_media_stop()
+        assert player._stop_issued_at is not None
+
+    def test_state_sliding_window_while_service_still_reports_running(self):
+        """When stop was issued but service still reports game running, the hold
+        window is extended (stop_issued_at is refreshed) so the window never
+        expires while the process is still alive."""
+        from homeassistant.util import dt as dt_util
+        from datetime import timedelta
+
+        data = make_coordinator_data(online=True, steam_running={"appId": 570, "name": "Dota 2"})
+        player, coordinator, client = _make_player(data)
+
+        # Simulate stop issued 29 s ago — window is about to expire
+        old_ts = dt_util.utcnow() - timedelta(seconds=29)
+        player._stop_issued_at = old_ts
+
+        # Coordinator still reports the game as running
+        coordinator.data.steam_running = {"appId": 570, "name": "Dota 2"}
+
+        state = player.state
+
+        assert state == MediaPlayerState.PLAYING
+        # stop_issued_at must have been slid forward (refreshed to ~now)
+        assert player._stop_issued_at > old_ts
+
+    def test_state_stop_hold_window_active_after_game_exits(self):
+        """Once service reports game gone, the 30 s hold window takes over so
+        HA does not immediately flip to IDLE before the next poll confirms."""
+        from homeassistant.util import dt as dt_util
+
+        data = make_coordinator_data(online=True, steam_running=None)
+        player, coordinator, client = _make_player(data)
+
+        # Stop was issued 5 s ago; service now reports no game running
+        player._stop_issued_at = dt_util.utcnow()
+        player._last_playing = {"appId": 570, "name": "Dota 2"}
+
+        assert player.state == MediaPlayerState.PLAYING
+
+    def test_state_normal_playing_does_not_touch_stop_issued_at(self):
+        """Without a stop in progress, state=PLAYING refreshes _last_playing
+        and leaves _stop_issued_at untouched (None)."""
+        data = make_coordinator_data(online=True, steam_running={"appId": 570, "name": "Dota 2"})
+        player, coordinator, client = _make_player(data)
+
+        assert player._stop_issued_at is None
+        state = player.state
+
+        assert state == MediaPlayerState.PLAYING
+        assert player._last_playing == {"appId": 570, "name": "Dota 2"}
+        assert player._stop_issued_at is None
+
 
 # ---------------------------------------------------------------------------
 # Unique ID and features

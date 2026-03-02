@@ -101,9 +101,19 @@ class PcRemoteSteamPlayer(
         if not self.coordinator.data.online:
             return MediaPlayerState.OFF
         if self.coordinator.data.steam_running:
+            # If a stop was issued, the service still reporting a running game
+            # means the process has not exited yet. Slide the hold window
+            # forward so it does not expire while the game is still dying, and
+            # suppress the _last_playing refresh so the window does not get
+            # confused about which game was last seen.
+            if self._stop_issued_at is not None:
+                self._stop_issued_at = dt_util.utcnow()
+                return MediaPlayerState.PLAYING
             self._last_playing = self.coordinator.data.steam_running
             return MediaPlayerState.PLAYING
-        # Hold optimistic playing state for 30 s after a stop command
+        # Hold optimistic playing state for 30 s after a stop command, to
+        # absorb the poll-cycle lag between the game exiting and the service
+        # confirming it is gone.
         if self._in_stop_hold_window():
             return MediaPlayerState.PLAYING
         return MediaPlayerState.IDLE
