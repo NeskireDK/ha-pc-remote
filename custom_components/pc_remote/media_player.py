@@ -194,6 +194,31 @@ class PcRemoteSteamPlayer(
             return await self._get_steam_logo()
         return None, None
 
+    async def async_get_browse_image(
+        self,
+        media_content_type: MediaType | str,
+        media_content_id: str,
+        media_image_id: str | None = None,
+    ) -> tuple[bytes | None, str | None]:
+        """Fetch artwork for a game in the media browser from the service."""
+        if not media_content_id:
+            return None, None
+        url = f"{self._artwork_base_url}/{media_content_id}"
+        return await self._fetch_artwork(url)
+
+    async def _fetch_artwork(self, url: str) -> tuple[bytes | None, str | None]:
+        """Fetch an image from the service artwork endpoint (exempt from API key auth)."""
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    content_type = resp.content_type or "image/jpeg"
+                    data = await resp.read()
+                    return data, content_type
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed to fetch artwork from %s: %s", url, err)
+        return None, None
+
     async def _get_steam_logo(self) -> tuple[bytes | None, str | None]:
         """Fetch the Steam logo once and return cached bytes on subsequent calls."""
         global _steam_logo_cache
