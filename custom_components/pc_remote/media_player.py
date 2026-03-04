@@ -204,20 +204,7 @@ class PcRemoteSteamPlayer(
         if not media_content_id:
             return None, None
         url = f"{self._artwork_base_url}/{media_content_id}"
-        return await self._fetch_artwork(url)
-
-    async def _fetch_artwork(self, url: str) -> tuple[bytes | None, str | None]:
-        """Fetch an image from the service artwork endpoint (exempt from API key auth)."""
-        session = async_get_clientsession(self.hass)
-        try:
-            async with session.get(url) as resp:
-                if resp.status == 200:
-                    content_type = resp.content_type or "image/jpeg"
-                    data = await resp.read()
-                    return data, content_type
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Failed to fetch artwork from %s: %s", url, err)
-        return None, None
+        return await self._async_fetch_image(url)
 
     async def _get_steam_logo(self) -> tuple[bytes | None, str | None]:
         """Fetch the Steam logo once and return cached bytes on subsequent calls."""
@@ -299,7 +286,6 @@ class PcRemoteSteamPlayer(
     ) -> BrowseMedia:
         """Return browsable Steam games."""
         games = self.coordinator.data.steam_games
-        base = self._artwork_base_url
         children = [
             BrowseMedia(
                 media_class=MediaClass.GAME,
@@ -308,7 +294,9 @@ class PcRemoteSteamPlayer(
                 title=g.get("name", "Unknown"),
                 can_play=True,
                 can_expand=False,
-                thumbnail=f"{base}/{g.get('appId', 0)}",
+                thumbnail=self.get_browse_image_url(
+                    MediaType.GAME, str(g.get("appId", "")),
+                ),
             )
             for g in games
         ]

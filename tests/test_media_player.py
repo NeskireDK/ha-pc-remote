@@ -160,28 +160,18 @@ class TestBrowseImage:
         data = make_coordinator_data()
         player, coordinator, client = _make_player(data)
 
-        mock_resp = MagicMock()
-        mock_resp.status = 200
-        mock_resp.content_type = "image/jpeg"
-        mock_resp.read = AsyncMock(return_value=b"\xff\xd8fake-jpg")
-        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_resp.__aexit__ = AsyncMock(return_value=False)
+        player._async_fetch_image = AsyncMock(
+            return_value=(b"\xff\xd8fake-jpg", "image/jpeg")
+        )
 
-        mock_session = MagicMock()
-        mock_session.get = MagicMock(return_value=mock_resp)
-
-        with patch(
-            "custom_components.pc_remote.media_player.async_get_clientsession",
-            return_value=mock_session,
-        ):
-            image_bytes, content_type = await player.async_get_browse_image(
-                "game", "570"
-            )
+        image_bytes, content_type = await player.async_get_browse_image(
+            "game", "570"
+        )
 
         assert image_bytes == b"\xff\xd8fake-jpg"
         assert content_type == "image/jpeg"
-        mock_session.get.assert_called_once()
-        call_url = mock_session.get.call_args[0][0]
+        player._async_fetch_image.assert_awaited_once()
+        call_url = player._async_fetch_image.call_args[0][0]
         assert "/api/steam/artwork/570" in call_url
 
     @pytest.mark.asyncio
@@ -194,44 +184,15 @@ class TestBrowseImage:
         assert content_type is None
 
     @pytest.mark.asyncio
-    async def test_browse_image_returns_none_on_404(self):
+    async def test_browse_image_returns_none_on_fetch_failure(self):
         data = make_coordinator_data()
         player, coordinator, client = _make_player(data)
 
-        mock_resp = MagicMock()
-        mock_resp.status = 404
-        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_resp.__aexit__ = AsyncMock(return_value=False)
+        player._async_fetch_image = AsyncMock(return_value=(None, None))
 
-        mock_session = MagicMock()
-        mock_session.get = MagicMock(return_value=mock_resp)
-
-        with patch(
-            "custom_components.pc_remote.media_player.async_get_clientsession",
-            return_value=mock_session,
-        ):
-            image_bytes, content_type = await player.async_get_browse_image(
-                "game", "99999"
-            )
-
-        assert image_bytes is None
-        assert content_type is None
-
-    @pytest.mark.asyncio
-    async def test_browse_image_handles_connection_error(self):
-        data = make_coordinator_data()
-        player, coordinator, client = _make_player(data)
-
-        mock_session = MagicMock()
-        mock_session.get = MagicMock(side_effect=Exception("connection refused"))
-
-        with patch(
-            "custom_components.pc_remote.media_player.async_get_clientsession",
-            return_value=mock_session,
-        ):
-            image_bytes, content_type = await player.async_get_browse_image(
-                "game", "570"
-            )
+        image_bytes, content_type = await player.async_get_browse_image(
+            "game", "99999"
+        )
 
         assert image_bytes is None
         assert content_type is None
