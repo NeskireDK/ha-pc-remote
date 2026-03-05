@@ -34,13 +34,14 @@ def _make_response(status: int = 200, json_data: dict | None = None) -> MagicMoc
 
 
 def _make_session(response: MagicMock) -> MagicMock:
-    """Wrap a response in a mock session whose .get/.post return it as async ctx manager."""
+    """Wrap a response in a mock session whose .get/.post/.put return it as async ctx manager."""
     session = MagicMock()
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=response)
     ctx.__aexit__ = AsyncMock(return_value=False)
     session.get = MagicMock(return_value=ctx)
     session.post = MagicMock(return_value=ctx)
+    session.put = MagicMock(return_value=ctx)
     return session
 
 
@@ -386,3 +387,101 @@ class TestUrlConstruction:
         session = MagicMock()
         client = PcRemoteClient("host", 5000, "secret-key", session)
         assert client._headers["X-Api-Key"] == "secret-key"
+
+
+# ---------------------------------------------------------------------------
+# API key header sent on every request
+# ---------------------------------------------------------------------------
+
+class TestApiKeyHeader:
+    """Verify every public method sends X-Api-Key via the centralised _request helpers."""
+
+    @pytest.mark.asyncio
+    async def test_get_health_sends_api_key(self):
+        resp = _make_response(200, {"success": True, "data": {"machineName": "PC"}})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.get_health()
+        headers = session.get.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_get_system_state_sends_api_key(self):
+        resp = _make_response(200, {"success": True, "data": {}})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.get_system_state()
+        headers = session.get.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_set_power_config_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.set_power_config(30)
+        headers = session.put.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_set_mode_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.set_mode("Gaming")
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_sleep_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.sleep()
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_set_audio_device_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.set_audio_device("Speakers")
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_steam_run_sends_api_key(self):
+        resp = _make_response(200, {"success": True, "data": None})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.steam_run(570)
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_steam_stop_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.steam_stop()
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_launch_app_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.launch_app("chrome")
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
+
+    @pytest.mark.asyncio
+    async def test_solo_monitor_sends_api_key(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.solo_monitor("mon1")
+        headers = session.post.call_args[1]["headers"]
+        assert headers["X-Api-Key"] == "test-key"
