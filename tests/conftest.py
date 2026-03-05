@@ -41,6 +41,13 @@ def _mock_store():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _mock_asyncio_sleep():
+    """Make asyncio.sleep a no-op so WoL loops and poll waits run instantly."""
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
