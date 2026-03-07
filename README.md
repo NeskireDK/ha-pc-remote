@@ -48,7 +48,7 @@ Two ways to add the integration:
 | Volume | Number | Master volume (0-100) |
 | Monitor Profile | Select | Apply a saved `.cfg` monitor profile |
 | Active Monitor | Select | Switch to a single monitor (solo mode) |
-| Steam | Media Player | Launch Steam + non-Steam games via source list or media browser; artwork thumbnails from local cache; turn on wakes PC via WoL, turn off sleeps PC |
+| Steam | Media Player | Launch Steam + non-Steam games via source list or media browser; artwork thumbnails from local cache; volume control; turn on wakes PC via WoL, turn off sleeps PC |
 | Idle Duration | Sensor | Seconds since last keyboard/mouse input on the PC |
 | {App Name} | Switch | Launch/kill configured apps |
 
@@ -58,7 +58,7 @@ App switches are created dynamically based on apps configured in the service. PC
 
 Two automation blueprints are included:
 
-- **Couch Gaming** — switches PC Mode, wakes the PC, and launches a Steam game in one action
+- **Couch Gaming** — switches PC Mode, wakes the PC, and optionally sleeps on exit
 - **Post-Session Sleep** — when the Steam player goes idle, waits N minutes and sleeps the PC
 
 ## Roadmap
