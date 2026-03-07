@@ -1,5 +1,8 @@
 # ha-pc-remote
 
+![Validate](https://github.com/NeskireDK/ha-pc-remote/actions/workflows/validate.yml/badge.svg)
+![Coverage](https://img.shields.io/endpoint?url=https://NeskireDK.github.io/ha-pc-remote/badges/coverage.json)
+![Tests](https://img.shields.io/endpoint?url=https://NeskireDK.github.io/ha-pc-remote/badges/tests.json)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 
 Home Assistant custom integration for controlling a PC remotely via [ha-pc-remote-service](https://github.com/NeskireDK/ha-pc-remote-service). Supports Windows (tray app) and Linux (headless daemon).

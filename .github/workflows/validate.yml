@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
         run: pip install pytest pytest-cov pytest-homeassistant-custom-component wakeonlan==3.1.0
 
       - name: Run tests with coverage
-        run: pytest tests/ --cov=custom_components/pc_remote --cov-report=term-missing --cov-report=html:coverage-report --cov-report=xml:coverage.xml --junitxml=test-results.xml
+        run: pytest tests/ --cov=custom_components/pc_remote --cov-report=term-missing --cov-report=html:coverage-report --cov-report=xml:coverage.xml --junitxml=test-results.xml 2>&1 | tee test-output.txt
 
       - name: Test summary
         if: always()
@@ -56,9 +56,40 @@ jobs:
         with:
           path: code-coverage-results.md
 
+      - name: Extract badge metrics
+        if: always()
+        id: metrics
+        run: |
+          LINE_PCT=$(python -c "import xml.etree.ElementTree as ET; t=ET.parse('coverage.xml').getroot(); print(f'{float(t.get(\"line-rate\",0))*100:.1f}')")
+          TEST_COUNT=$(grep -oP '(\d+) passed' test-output.txt | grep -oP '\d+' || echo "0")
+          echo "line_pct=$LINE_PCT" >> $GITHUB_OUTPUT
+          echo "test_count=$TEST_COUNT" >> $GITHUB_OUTPUT
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage-report/
+
+      - name: Generate badge JSON
+        if: github.ref == 'refs/heads/main'
+        run: |
+          LINE_PCT=${{ steps.metrics.outputs.line_pct }}
+          TEST_COUNT=${{ steps.metrics.outputs.test_count }}
+          if (( $(echo "$LINE_PCT >= 80" | bc -l) )); then COLOR="brightgreen"
+          elif (( $(echo "$LINE_PCT >= 60" | bc -l) )); then COLOR="green"
+          elif (( $(echo "$LINE_PCT >= 40" | bc -l) )); then COLOR="yellow"
+          else COLOR="red"; fi
+          mkdir -p badges
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${LINE_PCT}%\",\"color\":\"${COLOR}\"}" > badges/coverage.json
+          echo "{\"schemaVersion\":1,\"label\":\"tests\",\"message\":\"${TEST_COUNT} passed\",\"color\":\"brightgreen\"}" > badges/tests.json
+
+      - name: Deploy badges to gh-pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./badges
+          destination_dir: badges
+          keep_files: true
