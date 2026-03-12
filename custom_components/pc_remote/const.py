@@ -19,6 +19,9 @@ CONF_MAC_ADDRESS = "mac_address"
 DEFAULT_PORT = 5000
 DEFAULT_SCAN_INTERVAL = 30
 
+FAST_POLL_INTERVAL = 1
+FAST_POLL_DURATION = 180
+
 
 def build_device_info(
     entry: ConfigEntry,
