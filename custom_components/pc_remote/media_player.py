@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import os
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -20,15 +21,26 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from wakeonlan import send_magic_packet
 
 from .api import CannotConnectError, PcRemoteClient
-from .const import CONF_HOST, CONF_MAC_ADDRESS, CONF_PORT, DOMAIN, build_device_info
+from .const import (
+    CONF_HOST,
+    CONF_MAC_ADDRESS,
+    CONF_PORT,
+    DOMAIN,
+    FAST_POLL_DURATION,
+    FAST_POLL_INTERVAL,
+    build_device_info,
+)
 from .coordinator import PcRemoteCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+BIG_PICTURE_SOURCE = "Steam Big Picture"
 
 _steam_logo_cache: tuple[bytes, str] | None = None
 
@@ -78,6 +90,7 @@ class PcRemoteSteamPlayer(
         self._wake_task: asyncio.Task | None = None
         self._stop_issued_at: datetime | None = None
         self._last_playing: dict | None = None
+        self._fast_poll_unsub: callable | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -142,7 +155,9 @@ class PcRemoteSteamPlayer(
     @property
     def source_list(self) -> list[str]:
         """Return the list of recently played games."""
-        return [g.get("name", "") for g in self.coordinator.data.steam_games]
+        names = [g.get("name", "") for g in self.coordinator.data.steam_games]
+        names.append(BIG_PICTURE_SOURCE)
+        return names
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -184,6 +199,13 @@ class PcRemoteSteamPlayer(
         port = self._entry.data[CONF_PORT]
         return f"http://{host}:{port}/api/steam/artwork"
 
+    @property
+    def _artwork_cache_dir(self) -> str:
+        """Return the path to the artwork cache directory."""
+        return self.hass.config.path(
+            ".storage", f"pc_remote_{self._entry.entry_id}_artwork"
+        )
+
     _STEAM_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/960px-Steam_icon_logo.svg.png"
 
     @property
@@ -202,10 +224,18 @@ class PcRemoteSteamPlayer(
         return False
 
     async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
-        """Return media image bytes. Caches the Steam logo on first fetch."""
+        """Return media image bytes with disk caching for offline display."""
         running = self._effective_running
-        if running and running.get("appId"):
-            return await super().async_get_media_image()
+        if running and (app_id := running.get("appId")):
+            app_id_str = str(app_id)
+            data, content_type = await super().async_get_media_image()
+            if data:
+                await self._cache_artwork(app_id_str, data, content_type)
+                return data, content_type
+            cached = await self._get_cached_artwork(app_id_str)
+            if cached:
+                return cached
+            return None, None
         if self.state == MediaPlayerState.IDLE:
             return await self._get_steam_logo()
         return None, None
@@ -216,11 +246,18 @@ class PcRemoteSteamPlayer(
         media_content_id: str,
         media_image_id: str | None = None,
     ) -> tuple[bytes | None, str | None]:
-        """Fetch artwork for a game in the media browser from the service."""
+        """Fetch artwork for a game in the media browser, with disk cache fallback."""
         if not media_content_id:
             return None, None
         url = f"{self._artwork_base_url}/{media_content_id}"
-        return await self._async_fetch_image(url)
+        data, content_type = await self._async_fetch_image(url)
+        if data:
+            await self._cache_artwork(media_content_id, data, content_type)
+            return data, content_type
+        cached = await self._get_cached_artwork(media_content_id)
+        if cached:
+            return cached
+        return None, None
 
     async def _get_steam_logo(self) -> tuple[bytes | None, str | None]:
         """Fetch the Steam logo once and return cached bytes on subsequent calls."""
@@ -239,13 +276,86 @@ class PcRemoteSteamPlayer(
             _LOGGER.debug("Failed to fetch Steam logo: %s", err)
         return None, None
 
+    async def _cache_artwork(
+        self, app_id: str, data: bytes, content_type: str
+    ) -> None:
+        """Write artwork bytes and content type to the cache directory."""
+        cache_dir = self._artwork_cache_dir
+
+        def _write() -> None:
+            os.makedirs(cache_dir, exist_ok=True)
+            img_path = os.path.join(cache_dir, f"{app_id}.img")
+            meta_path = os.path.join(cache_dir, f"{app_id}.meta")
+            with open(img_path, "wb") as f:
+                f.write(data)
+            with open(meta_path, "w") as f:
+                f.write(content_type)
+
+        await self.hass.async_add_executor_job(_write)
+
+    async def _get_cached_artwork(
+        self, app_id: str
+    ) -> tuple[bytes, str] | None:
+        """Read cached artwork from disk if it exists."""
+        cache_dir = self._artwork_cache_dir
+        img_path = os.path.join(cache_dir, f"{app_id}.img")
+        meta_path = os.path.join(cache_dir, f"{app_id}.meta")
+
+        def _read() -> tuple[bytes, str] | None:
+            if not os.path.isfile(img_path) or not os.path.isfile(meta_path):
+                return None
+            with open(img_path, "rb") as f:
+                img_data = f.read()
+            with open(meta_path) as f:
+                ct = f.read().strip()
+            return img_data, ct
+
+        return await self.hass.async_add_executor_job(_read)
+
+    def _start_fast_poll(self) -> None:
+        """Switch coordinator to fast polling and schedule restoration."""
+        if self._fast_poll_unsub is not None:
+            self._fast_poll_unsub()
+        self.coordinator.update_interval = timedelta(seconds=FAST_POLL_INTERVAL)
+
+        def _restore_callback(_now: Any) -> None:
+            self._restore_normal_poll()
+
+        self._fast_poll_unsub = async_call_later(
+            self.hass, FAST_POLL_DURATION, _restore_callback
+        )
+
+    def _restore_normal_poll(self) -> None:
+        """Restore the coordinator to its normal polling interval."""
+        from .const import DEFAULT_SCAN_INTERVAL
+
+        self.coordinator.update_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+        if self._fast_poll_unsub is not None:
+            self._fast_poll_unsub()
+            self._fast_poll_unsub = None
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        if (
+            self._fast_poll_unsub is not None
+            and self.coordinator.data.online
+        ):
+            self._restore_normal_poll()
+        super()._handle_coordinator_update()
+
     async def async_will_remove_from_hass(self) -> None:
-        """Cancel any pending wake-and-play task on removal."""
+        """Cancel any pending wake-and-play task and fast poll timer on removal."""
         if self._wake_task and not self._wake_task.done():
             self._wake_task.cancel()
+        if self._fast_poll_unsub is not None:
+            self._fast_poll_unsub()
+            self._fast_poll_unsub = None
 
     async def async_select_source(self, source: str) -> None:
         """Launch the selected game."""
+        if source == BIG_PICTURE_SOURCE:
+            await self._client.launch_app("steam-bigpicture")
+            return
         for game in self.coordinator.data.steam_games:
             if game.get("name") == source:
                 app_id = game.get("appId")
@@ -276,6 +386,7 @@ class PcRemoteSteamPlayer(
         self.coordinator.set_power_state(True)
         self.async_write_ha_state()
         await self._send_wol_sustained(mac)
+        self._start_fast_poll()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Put the PC to sleep."""
@@ -316,6 +427,16 @@ class PcRemoteSteamPlayer(
             )
             for g in games
         ]
+        children.append(
+            BrowseMedia(
+                media_class=MediaClass.GAME,
+                media_content_id="steam-bigpicture",
+                media_content_type=MediaType.GAME,
+                title=BIG_PICTURE_SOURCE,
+                can_play=True,
+                can_expand=False,
+            )
+        )
         return BrowseMedia(
             media_class=MediaClass.DIRECTORY,
             media_content_id="steam_games",
@@ -333,6 +454,9 @@ class PcRemoteSteamPlayer(
         **kwargs: Any,
     ) -> None:
         """Launch a Steam game by app ID from the media browser."""
+        if media_id == "steam-bigpicture":
+            await self._client.launch_app("steam-bigpicture")
+            return
         try:
             app_id = int(media_id)
         except (ValueError, TypeError):
