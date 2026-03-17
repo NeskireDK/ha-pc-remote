@@ -111,12 +111,12 @@ class TestMediaTitleAndSource:
         ]
         data = make_coordinator_data(steam_games=games)
         player, *_ = _make_player(data)
-        assert player.source_list == ["Dota 2", "Cyberpunk 2077"]
+        assert player.source_list == ["Dota 2", "Cyberpunk 2077", "Steam Big Picture"]
 
-    def test_source_list_empty_when_no_games(self):
+    def test_source_list_always_includes_big_picture(self):
         data = make_coordinator_data(steam_games=[])
         player, *_ = _make_player(data)
-        assert player.source_list == []
+        assert player.source_list == ["Steam Big Picture"]
 
 
 # ---------------------------------------------------------------------------
@@ -358,7 +358,8 @@ class TestTurnOnOff:
         # Sustained WoL loop sends one packet per second for 20 s
         assert coordinator.hass.async_add_executor_job.await_count >= 1
         coordinator.set_power_state.assert_called_once_with(True)
-        player.async_write_ha_state.assert_called_once()
+        # Called: before wake (BUFFERING), inside _wake_and_wait, after wake (clear)
+        assert player.async_write_ha_state.call_count >= 2
 
     @pytest.mark.asyncio
     async def test_turn_on_no_mac_does_nothing(self):
@@ -534,7 +535,8 @@ class TestBrowseMedia:
         assert result.title == "Steam Games"
         assert result.can_expand is True
         assert result.can_play is False
-        assert len(result.children) == 2
+        # 2 games + Big Picture entry
+        assert len(result.children) == 3
 
     @pytest.mark.asyncio
     async def test_children_have_game_properties(self):
@@ -552,13 +554,14 @@ class TestBrowseMedia:
         assert "570" in child.thumbnail
 
     @pytest.mark.asyncio
-    async def test_empty_games_returns_empty_children(self):
+    async def test_empty_games_still_includes_big_picture(self):
         data = make_coordinator_data(steam_games=[])
         player, *_ = _make_player(data)
 
         result = await player.async_browse_media()
 
-        assert result.children == []
+        assert len(result.children) == 1
+        assert result.children[0].title == "Steam Big Picture"
 
 
 # ---------------------------------------------------------------------------
@@ -660,3 +663,102 @@ class TestVolumeControl:
         from homeassistant.components.media_player import MediaPlayerEntityFeature
         player, *_ = _make_player()
         assert player._attr_supported_features & MediaPlayerEntityFeature.VOLUME_SET
+
+
+# ---------------------------------------------------------------------------
+# _wake_and_wait (turn_on with sustained wake + health poll)
+# ---------------------------------------------------------------------------
+
+class TestWakeAndWait:
+    @pytest.mark.asyncio
+    async def test_turn_on_sends_sustained_wol_and_waits_for_health(self):
+        """turn_on calls _send_wol_sustained, polls health, and starts fast poll."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        # Health succeeds on first poll attempt
+        client.get_health = AsyncMock(return_value={"machineName": "TestPC"})
+
+        await player.async_turn_on()
+
+        # WoL sustained sends via async_add_executor_job
+        assert coordinator.hass.async_add_executor_job.await_count >= 1
+        coordinator.set_power_state.assert_called_once_with(True)
+        player.async_write_ha_state.assert_called()
+        # Health was polled at least once
+        client.get_health.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_turn_on_shows_buffering_during_wake(self):
+        """turn_on sets _wake_target so state=BUFFERING during WoL, clears after."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+
+        captured_target = None
+
+        async def capture_wake_target():
+            nonlocal captured_target
+            captured_target = player._wake_target
+            return True
+
+        player._wake_and_wait = capture_wake_target
+        client.get_health = AsyncMock(return_value={"machineName": "TestPC"})
+
+        await player.async_turn_on()
+
+        # During _wake_and_wait, wake_target was set (BUFFERING)
+        assert captured_target == {"appId": 0, "name": "Waking PC..."}
+        # After completion, wake_target is cleared
+        assert player._wake_target is None
+
+    @pytest.mark.asyncio
+    async def test_turn_on_clears_wake_target_on_failure(self):
+        """turn_on clears _wake_target even if _wake_and_wait raises."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+
+        async def failing_wake():
+            raise CannotConnectError("boom")
+
+        player._wake_and_wait = failing_wake
+
+        with pytest.raises(CannotConnectError):
+            await player.async_turn_on()
+
+        assert player._wake_target is None
+
+    @pytest.mark.asyncio
+    async def test_turn_on_without_mac_logs_error(self):
+        """No MAC configured — error logged, no WoL sent."""
+        data = make_coordinator_data(online=False)
+        entry = make_mock_entry()
+        entry.data = {"host": "192.168.1.100", "port": 5000, "api_key": "key"}
+        player, coordinator, client = _make_player(data, entry=entry)
+
+        await player.async_turn_on()
+
+        coordinator.hass.async_add_executor_job.assert_not_awaited()
+        coordinator.set_power_state.assert_not_called()
+        client.get_health.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_turn_on_returns_true_when_health_succeeds(self):
+        """_wake_and_wait returns True when health check passes."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        client.get_health = AsyncMock(return_value={"machineName": "TestPC"})
+
+        result = await player._wake_and_wait()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_turn_on_returns_false_when_health_never_succeeds(self):
+        """_wake_and_wait returns False after 36 failed health polls."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        client.get_health = AsyncMock(side_effect=CannotConnectError("offline"))
+
+        result = await player._wake_and_wait()
+
+        assert result is False
+        assert client.get_health.await_count == 36

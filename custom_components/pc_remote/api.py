@@ -150,6 +150,10 @@ class PcRemoteClient:
         """Send the sleep command to the PC."""
         await self._request_no_body("post", "/api/system/sleep")
 
+    async def trigger_update(self) -> dict:
+        """Trigger service auto-update check and install."""
+        return await self._request("post", "/api/system/update")
+
     # ------------------------------------------------------------------
     # Audio
     # ------------------------------------------------------------------

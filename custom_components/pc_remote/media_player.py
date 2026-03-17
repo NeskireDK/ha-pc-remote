@@ -22,6 +22,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
+from collections.abc import Callable
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from wakeonlan import send_magic_packet
@@ -90,7 +91,7 @@ class PcRemoteSteamPlayer(
         self._wake_task: asyncio.Task | None = None
         self._stop_issued_at: datetime | None = None
         self._last_playing: dict | None = None
-        self._fast_poll_unsub: callable | None = None
+        self._fast_poll_unsub: Callable | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -350,6 +351,7 @@ class PcRemoteSteamPlayer(
         if self._fast_poll_unsub is not None:
             self._fast_poll_unsub()
             self._fast_poll_unsub = None
+        await super().async_will_remove_from_hass()
 
     async def async_select_source(self, source: str) -> None:
         """Launch the selected game."""
@@ -377,16 +379,35 @@ class PcRemoteSteamPlayer(
                 return
             await asyncio.sleep(interval)
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Wake the PC via Wake-on-LAN (sustained 20 s retry loop)."""
+    async def _wake_and_wait(self) -> bool:
+        """Send sustained WoL and wait for service to come online (max 3 min)."""
         mac = self._entry.data.get(CONF_MAC_ADDRESS)
         if not mac:
             _LOGGER.error("MAC address not configured, cannot send WoL packet")
-            return
+            return False
         self.coordinator.set_power_state(True)
         self.async_write_ha_state()
         await self._send_wol_sustained(mac)
         self._start_fast_poll()
+        for _ in range(36):  # 36 * 5s = 3 min
+            await asyncio.sleep(5)
+            try:
+                await self._client.get_health()
+                return True
+            except CannotConnectError:
+                continue
+        _LOGGER.warning("PC did not come online within timeout")
+        return False
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Wake the PC via Wake-on-LAN (sustained retry + health poll)."""
+        self._wake_target = {"appId": 0, "name": "Waking PC..."}
+        self.async_write_ha_state()
+        try:
+            await self._wake_and_wait()
+        finally:
+            self._wake_target = None
+            self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Put the PC to sleep."""
@@ -503,36 +524,17 @@ class PcRemoteSteamPlayer(
 
     async def _wake_and_play(self, app_id: int, source: str) -> None:
         """Wake the PC via WoL, then launch the game when Steam is ready."""
-        mac = self._entry.data.get(CONF_MAC_ADDRESS)
-        if not mac:
-            _LOGGER.warning("Wake-and-play: MAC address not configured, cannot wake PC")
-            self._wake_target = None
-            self.async_write_ha_state()
-            return
-
-        # Capture target — coordinator refreshes must not clear this
         target = {"appId": app_id, "name": source}
-        await self._send_wol_sustained(mac)
+        self._wake_target = target
 
-        # Poll /api/health until service responds (max 3 minutes, every 5s)
-        online = False
-        for _ in range(36):
-            # Re-assert wake target each iteration — coordinator refreshes
-            # may have cleared it
-            self._wake_target = target
-            await asyncio.sleep(5)
-            try:
-                await self._client.get_health()
-                online = True
-                break
-            except CannotConnectError:
-                continue
-
+        online = await self._wake_and_wait()
         if not online:
-            _LOGGER.warning("Wake-and-play: PC did not come online within timeout")
             self._wake_target = None
             self.async_write_ha_state()
             return
+
+        # Re-assert wake target in case coordinator refresh cleared it
+        self._wake_target = target
 
         # Wait for Steam to be ready before launching
         steam_ready = await self._wait_for_steam_ready()

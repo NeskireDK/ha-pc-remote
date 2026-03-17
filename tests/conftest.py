@@ -139,6 +139,7 @@ def make_mock_client() -> MagicMock:
     client.set_mode = AsyncMock()
     client.sleep = AsyncMock()
     client.set_power_config = AsyncMock()
+    client.trigger_update = AsyncMock(return_value={})
     client.test_connection = AsyncMock(return_value=True)
     return client
 
