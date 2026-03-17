@@ -29,7 +29,6 @@ async def async_setup_entry(
     client: PcRemoteClient = data["client"]
     async_add_entities([
         PcRemoteAudioOutputSelect(coordinator, client, entry),
-        PcRemoteMonitorProfileSelect(coordinator, client, entry),
         PcRemoteMonitorSoloSelect(coordinator, client, entry),
         PcRemoteModeSelect(coordinator, client, entry),
     ])
@@ -99,39 +98,6 @@ class PcRemoteAudioOutputSelect(PcRemoteSelectBase):
         """Set the audio output device."""
         await self._client.set_audio_device(option)
         self.coordinator.data.current_audio_device = option
-        self.async_write_ha_state()
-
-
-class PcRemoteMonitorProfileSelect(PcRemoteSelectBase):
-    """Select entity for choosing a monitor profile."""
-
-    _attr_translation_key = "monitor_profile"
-    _attr_icon = "mdi:monitor-shimmer"
-
-    def __init__(
-        self,
-        coordinator: PcRemoteCoordinator,
-        client: PcRemoteClient,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize the select entity."""
-        super().__init__(coordinator, client, entry, "monitor_profile")
-
-    @property
-    def options(self) -> list[str]:
-        """Return the list of available monitor profiles."""
-        return self.coordinator.data.monitor_profiles
-
-    @property
-    def current_option(self) -> str | None:
-        """Return the persisted monitor profile selection."""
-        return self.coordinator.data.current_monitor_profile
-
-    async def async_select_option(self, option: str) -> None:
-        """Activate the selected monitor profile."""
-        await self._client.set_monitor_profile(option)
-        self.coordinator.data.current_monitor_profile = option
-        await self.coordinator.persist_selection("monitor_profile", option)
         self.async_write_ha_state()
 
 

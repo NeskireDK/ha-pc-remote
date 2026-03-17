@@ -37,14 +37,12 @@ class PcRemoteData:
     audio_devices: list[dict] = field(default_factory=list)
     current_audio_device: str | None = None
     volume: int | None = None
-    monitor_profiles: list[str] = field(default_factory=list)
     monitors: list[dict] = field(default_factory=list)
     apps: list[dict] = field(default_factory=list)
     steam_games: list[dict] = field(default_factory=list)
     steam_running: dict | None = None
     modes: list[str] = field(default_factory=list)
     current_mode: str | None = None
-    current_monitor_profile: str | None = None
     idle_seconds: int | None = None
     steam_bindings: dict | None = None
     steam_ready: bool | None = None
@@ -170,12 +168,6 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
             _LOGGER.debug("Failed to fetch audio devices: %s", err)
 
         try:
-            profiles = await self.client.get_monitor_profiles()
-            data.monitor_profiles = [p.get("name", p) if isinstance(p, dict) else p for p in profiles]
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Failed to fetch monitor profiles: %s", err)
-
-        try:
             data.monitors = await self.client.get_monitors()
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch monitors: %s", err)
@@ -217,19 +209,12 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         """Restore persisted mode/profile, invalidating stale values."""
         selections = await self.load_selections()
         mode = selections.get("mode")
-        profile = selections.get("monitor_profile")
 
         # Restore mode only if still in the available list
         if mode and mode in data.modes:
             data.current_mode = mode
         else:
             data.current_mode = None
-
-        # Restore profile only if still in the available list
-        if profile and profile in data.monitor_profiles:
-            data.current_monitor_profile = profile
-        else:
-            data.current_monitor_profile = None
 
         # Audio change detection: if the audio device changed externally, clear mode
         if (
@@ -255,9 +240,6 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         data.volume = audio.get("volume")
 
         data.monitors = state.get("monitors", [])
-
-        profiles = state.get("monitorProfiles", [])
-        data.monitor_profiles = [p.get("name", p) if isinstance(p, dict) else p for p in profiles]
 
         data.steam_games = state.get("steamGames", [])
         data.steam_running = state.get("runningGame")

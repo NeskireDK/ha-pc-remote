@@ -34,7 +34,6 @@ def _full_system_state() -> dict:
             "volume": 60,
         },
         "monitors": [{"monitorId": "m1", "monitorName": "Dell", "isPrimary": True}],
-        "monitorProfiles": [{"name": "Desktop"}, {"name": "Gaming"}],
         "steamGames": [{"appId": 570, "name": "Dota 2"}],
         "runningGame": None,
         "modes": ["Gaming", "Work"],
@@ -58,7 +57,6 @@ class TestUpdateDataOnline:
         assert data.online is True
         assert data.machine_name == "TestPC"
         assert data.volume == 60
-        assert data.monitor_profiles == ["Desktop", "Gaming"]
         assert data.modes == ["Gaming", "Work"]
         assert data.steam_games[0]["name"] == "Dota 2"
 
@@ -136,7 +134,6 @@ class TestUpdateDataFallback:
         client.get_audio_devices.return_value = [
             {"name": "Speakers", "isDefault": True, "volume": 42}
         ]
-        client.get_monitor_profiles.return_value = [{"name": "Desktop"}]
         client.get_monitors.return_value = []
         client.get_apps.return_value = []
         client.get_steam_games.return_value = [{"appId": 570, "name": "Dota 2"}]
@@ -149,7 +146,6 @@ class TestUpdateDataFallback:
         assert data.online is True
         assert data.volume == 42
         assert data.current_audio_device == "Speakers"
-        assert data.monitor_profiles == ["Desktop"]
         assert data.modes == ["Gaming"]
 
     @pytest.mark.asyncio
@@ -159,7 +155,6 @@ class TestUpdateDataFallback:
         client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
         client.get_system_state.side_effect = Exception("no state")
         client.get_audio_devices.return_value = []
-        client.get_monitor_profiles.return_value = []
         client.get_monitors.return_value = []
         client.get_apps.return_value = []
         client.get_steam_games.side_effect = Exception("steam down")
@@ -172,28 +167,6 @@ class TestUpdateDataFallback:
 
         assert data.steam_games[0]["name"] == "Fallback Game"
 
-    @pytest.mark.asyncio
-    async def test_monitor_profile_strings_extracted_from_dicts(self, hass):
-        """Profiles returned as dicts have their 'name' extracted."""
-        client = make_mock_client()
-        client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
-        client.get_system_state.side_effect = Exception("no state")
-        client.get_audio_devices.return_value = []
-        client.get_monitor_profiles.return_value = [
-            {"name": "Desktop"},
-            "Gaming",  # plain string should also work
-        ]
-        client.get_monitors.return_value = []
-        client.get_apps.return_value = []
-        client.get_steam_games.return_value = []
-        client.get_steam_running.return_value = None
-        client.get_modes.return_value = []
-
-        coord = _make_coordinator(hass, client)
-        data = await coord._async_update_data()
-
-        assert "Desktop" in data.monitor_profiles
-        assert "Gaming" in data.monitor_profiles
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +256,6 @@ class TestPopulateFromSystemState:
 
         assert data.volume == 60
         assert data.current_audio_device == "Speakers"
-        assert data.monitor_profiles == ["Desktop", "Gaming"]
         assert data.steam_games[0]["name"] == "Dota 2"
         assert data.modes == ["Gaming", "Work"]
         assert data.steam_running is None
@@ -295,7 +267,6 @@ class TestPopulateFromSystemState:
         coord._populate_from_system_state(data, {})
 
         assert data.audio_devices == []
-        assert data.monitor_profiles == []
         assert data.steam_games == []
         assert data.modes == []
 
@@ -318,9 +289,9 @@ class TestSelectionPersistence:
     @pytest.mark.asyncio
     async def test_load_selections_returns_dict_from_store(self, hass):
         coord = _make_coordinator(hass)
-        coord._selections_store._data = {"mode": "Gaming", "monitor_profile": "TV"}
+        coord._selections_store._data = {"mode": "Gaming"}
         result = await coord.load_selections()
-        assert result == {"mode": "Gaming", "monitor_profile": "TV"}
+        assert result == {"mode": "Gaming"}
 
     @pytest.mark.asyncio
     async def test_load_selections_returns_empty_dict_when_no_data(self, hass):
@@ -339,9 +310,9 @@ class TestSelectionPersistence:
     async def test_persist_selection_merges_with_existing(self, hass):
         coord = _make_coordinator(hass)
         await coord.persist_selection("mode", "Work")
-        await coord.persist_selection("monitor_profile", "Desktop")
+        await coord.persist_selection("mode", "Gaming")
         stored = await coord._selections_store.async_load()
-        assert stored == {"mode": "Work", "monitor_profile": "Desktop"}
+        assert stored == {"mode": "Gaming"}
 
     @pytest.mark.asyncio
     async def test_persist_selection_can_clear_value(self, hass):
@@ -372,22 +343,6 @@ class TestRestoreSelections:
         data = PcRemoteData(modes=["Gaming", "Work"])
         await coord._restore_selections(data)
         assert data.current_mode is None
-
-    @pytest.mark.asyncio
-    async def test_restores_monitor_profile_when_in_available_list(self, hass):
-        coord = _make_coordinator(hass)
-        await coord.persist_selection("monitor_profile", "Desktop")
-        data = PcRemoteData(monitor_profiles=["Desktop", "Gaming"])
-        await coord._restore_selections(data)
-        assert data.current_monitor_profile == "Desktop"
-
-    @pytest.mark.asyncio
-    async def test_clears_monitor_profile_when_not_in_available_list(self, hass):
-        coord = _make_coordinator(hass)
-        await coord.persist_selection("monitor_profile", "Removed")
-        data = PcRemoteData(monitor_profiles=["Desktop", "Gaming"])
-        await coord._restore_selections(data)
-        assert data.current_monitor_profile is None
 
     @pytest.mark.asyncio
     async def test_audio_change_clears_persisted_mode(self, hass):
@@ -443,12 +398,10 @@ class TestRestoreSelections:
 
         coord = _make_coordinator(hass, client)
         await coord.persist_selection("mode", "Gaming")
-        await coord.persist_selection("monitor_profile", "Desktop")
 
         data = await coord._async_update_data()
 
         assert data.current_mode == "Gaming"
-        assert data.current_monitor_profile == "Desktop"
 
     @pytest.mark.asyncio
     async def test_fallback_path_restores_selections(self, hass):
@@ -457,7 +410,6 @@ class TestRestoreSelections:
         client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
         client.get_system_state.side_effect = Exception("no state")
         client.get_audio_devices.return_value = []
-        client.get_monitor_profiles.return_value = ["Desktop", "Gaming"]
         client.get_monitors.return_value = []
         client.get_apps.return_value = []
         client.get_steam_games.return_value = []
@@ -466,9 +418,7 @@ class TestRestoreSelections:
 
         coord = _make_coordinator(hass, client)
         await coord.persist_selection("mode", "Gaming")
-        await coord.persist_selection("monitor_profile", "Desktop")
 
         data = await coord._async_update_data()
 
         assert data.current_mode == "Gaming"
-        assert data.current_monitor_profile == "Desktop"

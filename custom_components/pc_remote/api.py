@@ -176,16 +176,6 @@ class PcRemoteClient:
     # Monitor
     # ------------------------------------------------------------------
 
-    async def get_monitor_profiles(self) -> list[dict]:
-        """Get available monitor profiles."""
-        return await self._request("get", "/api/monitor/profiles")
-
-    async def set_monitor_profile(self, profile: str) -> None:
-        """Activate a monitor profile."""
-        await self._request_no_body(
-            "post", f"/api/monitor/set/{quote(profile, safe='')}",
-        )
-
     async def get_monitors(self) -> list[dict]:
         """Get connected monitors."""
         return await self._request("get", "/api/monitor/list")

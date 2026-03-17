@@ -5,7 +5,6 @@
     },
     "select": {
       "audio_output": { "name": "Audio Output" },
-      "monitor_profile": { "name": "Monitor Profile" },
       "active_monitor": { "name": "Active Monitor" },
       "pc_mode": { "name": "PC Mode" }
     },

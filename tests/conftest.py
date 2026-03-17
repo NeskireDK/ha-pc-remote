@@ -64,7 +64,6 @@ def make_coordinator_data(**kwargs) -> PcRemoteData:
         ],
         current_audio_device="Speakers",
         volume=50,
-        monitor_profiles=["Desktop", "Gaming", "TV"],
         monitors=[
             {"monitorId": "mon1", "monitorName": "Dell U2723D", "isPrimary": True},
             {"monitorId": "mon2", "monitorName": "LG 27UK850", "isPrimary": False},
@@ -79,7 +78,6 @@ def make_coordinator_data(**kwargs) -> PcRemoteData:
         steam_running=None,
         modes=["Gaming", "Work", "TV"],
         current_mode=None,
-        current_monitor_profile=None,
         idle_seconds=30,
         steam_bindings=None,
         auto_sleep_minutes=30,
@@ -123,8 +121,6 @@ def make_mock_client() -> MagicMock:
     client.get_audio_devices = AsyncMock(return_value=[])
     client.set_audio_device = AsyncMock()
     client.set_volume = AsyncMock()
-    client.get_monitor_profiles = AsyncMock(return_value=[])
-    client.set_monitor_profile = AsyncMock()
     client.get_monitors = AsyncMock(return_value=[])
     client.solo_monitor = AsyncMock()
     client.get_apps = AsyncMock(return_value=[])

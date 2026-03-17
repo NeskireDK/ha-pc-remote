@@ -230,22 +230,6 @@ class TestAudio:
 
 class TestMonitor:
     @pytest.mark.asyncio
-    async def test_get_monitor_profiles(self):
-        profiles = [{"name": "Desktop"}, {"name": "Gaming"}]
-        resp = _make_response(200, {"success": True, "data": profiles})
-        client = _make_client(_make_session(resp))
-        result = await client.get_monitor_profiles()
-        assert result == profiles
-
-    @pytest.mark.asyncio
-    async def test_set_monitor_profile_encodes_name(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.set_monitor_profile("TV Mode")
-        assert "TV%20Mode" in session.post.call_args[0][0]
-
-    @pytest.mark.asyncio
     async def test_solo_monitor_posts_correct_id(self):
         resp = _make_response(200, {})
         session = _make_session(resp)
