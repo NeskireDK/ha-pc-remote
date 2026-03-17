@@ -22,7 +22,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.typing import CALLBACK_TYPE
+from collections.abc import Callable
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from wakeonlan import send_magic_packet
@@ -91,7 +91,7 @@ class PcRemoteSteamPlayer(
         self._wake_task: asyncio.Task | None = None
         self._stop_issued_at: datetime | None = None
         self._last_playing: dict | None = None
-        self._fast_poll_unsub: CALLBACK_TYPE | None = None
+        self._fast_poll_unsub: Callable | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
