@@ -256,10 +256,9 @@ class PcRemoteClient:
     # Connection test
     # ------------------------------------------------------------------
 
-    async def test_connection(self) -> bool:
+    async def test_connection(self) -> None:
         """Test the connection to the PC Remote service."""
         await self.get_health()
-        return True
 
 
 class CannotConnectError(Exception):
