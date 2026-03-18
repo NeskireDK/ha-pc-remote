@@ -37,6 +37,10 @@ async def async_setup_entry(
     entities.append(PcRemotePowerSwitch(coordinator, client, entry))
 
     # App switches
+    # NOTE: App switches are created once at setup time from coordinator.data.apps.
+    # If the app list changes on the service side (apps added/removed), those changes
+    # will not be reflected until the config entry is reloaded. The is_on state for
+    # each existing switch is refreshed on every coordinator update via coordinator.data.apps.
     for app in coordinator.data.apps:
         entities.append(
             PcRemoteAppSwitch(
