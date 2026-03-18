@@ -61,7 +61,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     scan_interval = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
     coordinator = PcRemoteCoordinator(hass, client, entry.entry_id, scan_interval)
     await coordinator.async_load_steam_cache()
-    await coordinator.load_selections()
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
