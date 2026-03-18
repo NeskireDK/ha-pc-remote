@@ -10,12 +10,11 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN
 from .coordinator import PcRemoteCoordinator
+from .entity_base import PcRemoteEntityBase
 
 
 async def async_setup_entry(
@@ -32,9 +31,7 @@ async def async_setup_entry(
     ])
 
 
-class PcRemoteIdleSensor(
-    CoordinatorEntity[PcRemoteCoordinator], SensorEntity
-):
+class PcRemoteIdleSensor(PcRemoteEntityBase, SensorEntity):
     """Sensor for user idle duration on the remote PC."""
 
     _attr_has_entity_name = True
@@ -51,18 +48,8 @@ class PcRemoteIdleSensor(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the idle duration sensor."""
-        super().__init__(coordinator)
-        self._entry = entry
+        super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_idle_duration"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
 
     @property
     def available(self) -> bool:
@@ -75,9 +62,7 @@ class PcRemoteIdleSensor(
         return self.coordinator.data.idle_seconds
 
 
-class PcRemoteVersionSensor(
-    CoordinatorEntity[PcRemoteCoordinator], SensorEntity
-):
+class PcRemoteVersionSensor(PcRemoteEntityBase, SensorEntity):
     """Sensor for the service version on the remote PC."""
 
     _attr_has_entity_name = True
@@ -91,18 +76,8 @@ class PcRemoteVersionSensor(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the service version sensor."""
-        super().__init__(coordinator)
-        self._entry = entry
+        super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_service_version"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
 
     @property
     def available(self) -> bool:

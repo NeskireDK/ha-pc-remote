@@ -19,11 +19,9 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from collections.abc import Callable
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 from wakeonlan import send_magic_packet
 
@@ -35,13 +33,14 @@ from .const import (
     DOMAIN,
     FAST_POLL_DURATION,
     FAST_POLL_INTERVAL,
-    build_device_info,
 )
 from .coordinator import PcRemoteCoordinator
+from .entity_base import PcRemoteEntityBase
 
 _LOGGER = logging.getLogger(__name__)
 
 BIG_PICTURE_SOURCE = "Steam Big Picture"
+WAKE_RETRY_COUNT = 36  # 36 * 5s = 3 min
 
 _steam_logo_cache: tuple[bytes, str] | None = None
 
@@ -58,9 +57,7 @@ async def async_setup_entry(
     async_add_entities([PcRemoteSteamPlayer(coordinator, client, entry)])
 
 
-class PcRemoteSteamPlayer(
-    CoordinatorEntity[PcRemoteCoordinator], MediaPlayerEntity
-):
+class PcRemoteSteamPlayer(PcRemoteEntityBase, MediaPlayerEntity):
     """Media player entity for Steam game control."""
 
     _attr_has_entity_name = True
@@ -83,9 +80,8 @@ class PcRemoteSteamPlayer(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the media player entity."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self._client = client
-        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_steam"
         self._wake_target: dict | None = None
         self._wake_task: asyncio.Task | None = None
@@ -93,15 +89,6 @@ class PcRemoteSteamPlayer(
         self._last_playing: dict | None = None
         self._fast_poll_unsub: Callable | None = None
         self._normal_poll_interval = coordinator.update_interval
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
 
     def _in_stop_hold_window(self) -> bool:
         """Return True if we are within 30 s of a stop command being issued."""
@@ -399,7 +386,7 @@ class PcRemoteSteamPlayer(
         self.async_write_ha_state()
         await self._send_wol_sustained(mac)
         self._start_fast_poll()
-        for _ in range(36):  # 36 * 5s = 3 min
+        for _ in range(WAKE_RETRY_COUNT):  # WAKE_RETRY_COUNT * 5s = 3 min
             await asyncio.sleep(5)
             try:
                 await self._client.get_health()

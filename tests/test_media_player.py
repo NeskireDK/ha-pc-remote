@@ -8,7 +8,7 @@ import pytest
 
 from custom_components.pc_remote.api import CannotConnectError
 from custom_components.pc_remote.coordinator import PcRemoteData
-from custom_components.pc_remote.media_player import PcRemoteSteamPlayer
+from custom_components.pc_remote.media_player import PcRemoteSteamPlayer, WAKE_RETRY_COUNT
 from tests.conftest import (
     make_coordinator_data,
     make_mock_client,
@@ -761,4 +761,4 @@ class TestWakeAndWait:
         result = await player._wake_and_wait()
 
         assert result is False
-        assert client.get_health.await_count == 36
+        assert client.get_health.await_count == WAKE_RETRY_COUNT
