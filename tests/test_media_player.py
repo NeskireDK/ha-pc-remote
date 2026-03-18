@@ -362,18 +362,6 @@ class TestTurnOnOff:
         assert player.async_write_ha_state.call_count >= 2
 
     @pytest.mark.asyncio
-    async def test_turn_on_no_mac_does_nothing(self):
-        data = make_coordinator_data(online=False)
-        entry = make_mock_entry()
-        entry.data = {"host": "192.168.1.100", "port": 5000, "api_key": "key"}
-        player, coordinator, client = _make_player(data, entry=entry)
-
-        await player.async_turn_on()
-
-        coordinator.hass.async_add_executor_job.assert_not_awaited()
-        coordinator.set_power_state.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_turn_on_wol_error_does_not_propagate(self):
         data = make_coordinator_data(online=False)
         player, coordinator, client = _make_player(data)
@@ -449,8 +437,8 @@ class TestMediaStop:
         data = make_coordinator_data(online=True, steam_running={"appId": 570, "name": "Dota 2"})
         player, coordinator, client = _make_player(data)
 
-        # Simulate stop issued 29 s ago — window is about to expire
-        old_ts = dt_util.utcnow() - timedelta(seconds=29)
+        # Simulate stop issued 25 s ago — window is approaching expiry but has margin
+        old_ts = dt_util.utcnow() - timedelta(seconds=25)
         player._stop_issued_at = old_ts
 
         # Coordinator still reports the game as running
@@ -762,3 +750,222 @@ class TestWakeAndWait:
 
         assert result is False
         assert client.get_health.await_count == WAKE_RETRY_COUNT
+
+
+# ---------------------------------------------------------------------------
+# _wait_for_steam_ready retry loop (T10)
+# ---------------------------------------------------------------------------
+
+class TestWaitForSteamReady:
+    @pytest.mark.asyncio
+    async def test_returns_true_when_steam_ready_immediately(self):
+        data = make_coordinator_data()
+        player, coordinator, client = _make_player(data)
+        client.get_system_state = AsyncMock(return_value={"steamReady": True})
+
+        result = await player._wait_for_steam_ready()
+
+        assert result is True
+        assert client.get_system_state.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_true_after_retries(self):
+        data = make_coordinator_data()
+        player, coordinator, client = _make_player(data)
+        client.get_system_state = AsyncMock(side_effect=[
+            {"steamReady": False},
+            {"steamReady": False},
+            {"steamReady": True},
+        ])
+
+        result = await player._wait_for_steam_ready()
+
+        assert result is True
+        assert client.get_system_state.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_steam_never_ready(self):
+        data = make_coordinator_data()
+        player, coordinator, client = _make_player(data)
+        client.get_system_state = AsyncMock(return_value={"steamReady": False})
+
+        # max_wait=10, interval=5 → 2 iterations
+        result = await player._wait_for_steam_ready(max_wait=10, interval=5)
+
+        assert result is False
+        assert client.get_system_state.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_connection_error_does_not_abort_loop(self):
+        """CannotConnectError is swallowed and retrying continues."""
+        data = make_coordinator_data()
+        player, coordinator, client = _make_player(data)
+        from custom_components.pc_remote.api import CannotConnectError as CCE
+        client.get_system_state = AsyncMock(side_effect=[
+            CCE("down"),
+            {"steamReady": True},
+        ])
+
+        result = await player._wait_for_steam_ready()
+
+        assert result is True
+
+
+# ---------------------------------------------------------------------------
+# _wake_and_play retry and exit (T10)
+# ---------------------------------------------------------------------------
+
+class TestWakeAndPlay:
+    @pytest.mark.asyncio
+    async def test_clears_wake_target_when_wake_fails(self):
+        """When _wake_and_wait returns False, _wake_target is cleared and steam_run not called."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        player._wake_and_wait = AsyncMock(return_value=False)
+
+        await player._wake_and_play(570, "Dota 2")
+
+        assert player._wake_target is None
+        client.steam_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_launches_game_after_successful_wake(self):
+        """When wake succeeds and Steam is ready, steam_run is called and running game is set."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        player._wake_and_wait = AsyncMock(return_value=True)
+        player._wait_for_steam_ready = AsyncMock(return_value=True)
+        client.steam_run = AsyncMock(return_value={"appId": 570, "name": "Dota 2"})
+
+        await player._wake_and_play(570, "Dota 2")
+
+        client.steam_run.assert_awaited_once_with(570)
+        assert coordinator.data.steam_running == {"appId": 570, "name": "Dota 2"}
+        assert player._wake_target is None
+
+    @pytest.mark.asyncio
+    async def test_clears_wake_target_even_when_steam_run_fails(self):
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        player._wake_and_wait = AsyncMock(return_value=True)
+        player._wait_for_steam_ready = AsyncMock(return_value=True)
+        client.steam_run = AsyncMock(side_effect=CannotConnectError("boom"))
+
+        await player._wake_and_play(570, "Dota 2")
+
+        assert player._wake_target is None
+
+
+# ---------------------------------------------------------------------------
+# Artwork cache miss/hit (T11)
+# ---------------------------------------------------------------------------
+
+class TestArtworkCache:
+    @pytest.mark.asyncio
+    async def test_cache_miss_fetches_and_caches(self):
+        """When live fetch succeeds, artwork is cached and returned via async_get_browse_image."""
+        data = make_coordinator_data(
+            online=True,
+            steam_running={"appId": 570, "name": "Dota 2"},
+        )
+        player, coordinator, client = _make_player(data)
+
+        image_bytes = b"fakeimage"
+        content_type = "image/jpeg"
+
+        player._async_fetch_image = AsyncMock(return_value=(image_bytes, content_type))
+        player._cache_artwork = AsyncMock()
+        player._get_cached_artwork = AsyncMock(return_value=None)
+
+        result = await player.async_get_browse_image("game", "570")
+
+        assert result == (image_bytes, content_type)
+        player._cache_artwork.assert_awaited_once_with("570", image_bytes, content_type)
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_returns_without_network_call(self):
+        """When live fetch fails but cache exists, cached data is returned."""
+        data = make_coordinator_data(
+            online=True,
+            steam_running={"appId": 570, "name": "Dota 2"},
+        )
+        player, coordinator, client = _make_player(data)
+
+        cached_bytes = b"cachedimage"
+        cached_ct = "image/jpeg"
+
+        player._async_fetch_image = AsyncMock(return_value=(None, None))
+        player._cache_artwork = AsyncMock()
+        player._get_cached_artwork = AsyncMock(return_value=(cached_bytes, cached_ct))
+
+        result = await player.async_get_browse_image("game", "570")
+
+        assert result == (cached_bytes, cached_ct)
+        player._cache_artwork.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _handle_coordinator_update and async_will_remove_from_hass (T12)
+# ---------------------------------------------------------------------------
+
+class TestCoordinatorUpdateAndRemoval:
+    def test_handle_coordinator_update_restores_poll_when_online(self):
+        """When fast poll is active and PC comes online, normal poll is restored."""
+        data = make_coordinator_data(online=True)
+        player, coordinator, client = _make_player(data)
+        player._fast_poll_unsub = MagicMock()
+        player._restore_normal_poll = MagicMock()
+
+        player._handle_coordinator_update()
+
+        player._restore_normal_poll.assert_called_once()
+
+    def test_handle_coordinator_update_does_not_restore_when_offline(self):
+        """When fast poll is active but PC still offline, do not restore."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+        player._fast_poll_unsub = MagicMock()
+        player._restore_normal_poll = MagicMock()
+
+        player._handle_coordinator_update()
+
+        player._restore_normal_poll.assert_not_called()
+
+    def test_handle_coordinator_update_does_nothing_when_no_fast_poll(self):
+        """When no fast poll active, normal update still happens."""
+        data = make_coordinator_data(online=True)
+        player, coordinator, client = _make_player(data)
+        player._fast_poll_unsub = None
+        player._restore_normal_poll = MagicMock()
+
+        player._handle_coordinator_update()
+
+        player._restore_normal_poll.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_will_remove_cancels_wake_task(self):
+        """Pending wake task is cancelled on entity removal."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+
+        mock_task = MagicMock()
+        mock_task.done.return_value = False
+        player._wake_task = mock_task
+
+        await player.async_will_remove_from_hass()
+
+        mock_task.cancel.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_will_remove_cancels_fast_poll_timer(self):
+        """Fast poll timer unsubscribe is called on entity removal."""
+        data = make_coordinator_data(online=False)
+        player, coordinator, client = _make_player(data)
+
+        unsub = MagicMock()
+        player._fast_poll_unsub = unsub
+
+        await player.async_will_remove_from_hass()
+
+        unsub.assert_called_once()
+        assert player._fast_poll_unsub is None

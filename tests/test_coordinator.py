@@ -252,6 +252,8 @@ class TestPopulateFromSystemState:
         coord = _make_coordinator(hass)
         data = PcRemoteData()
         state = _full_system_state()
+        state["idleSeconds"] = 120
+        state["steamBindings"] = {"defaultPcMode": "couch", "gamePcModeBindings": {}}
         coord._populate_from_system_state(data, state)
 
         assert data.volume == 60
@@ -259,6 +261,30 @@ class TestPopulateFromSystemState:
         assert data.steam_games[0]["name"] == "Dota 2"
         assert data.modes == ["Gaming", "Work"]
         assert data.steam_running is None
+        assert data.idle_seconds == 120
+        assert data.steam_bindings == {"defaultPcMode": "couch", "gamePcModeBindings": {}}
+
+    @pytest.mark.asyncio
+    async def test_idle_seconds_none_when_missing(self, hass):
+        coord = _make_coordinator(hass)
+        data = PcRemoteData()
+        coord._populate_from_system_state(data, _full_system_state())
+        assert data.idle_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_steam_bindings_none_when_missing(self, hass):
+        coord = _make_coordinator(hass)
+        data = PcRemoteData()
+        coord._populate_from_system_state(data, _full_system_state())
+        assert data.steam_bindings is None
+
+    @pytest.mark.asyncio
+    async def test_apps_not_set_by_system_state(self, hass):
+        """_populate_from_system_state does not set apps; it remains at default."""
+        coord = _make_coordinator(hass)
+        data = PcRemoteData()
+        coord._populate_from_system_state(data, _full_system_state())
+        assert data.apps == []
 
     @pytest.mark.asyncio
     async def test_handles_empty_state(self, hass):
