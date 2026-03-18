@@ -345,42 +345,20 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._host is None or self._port is None:
             return self.async_abort(reason="unknown")
 
-        session = async_get_clientsession(self.hass)
-        client = PcRemoteClient(
-            host=self._host,
-            port=self._port,
-            api_key=self._api_key,
-            session=session,
-        )
+        mac_addresses, error_key = await self._fetch_mac_addresses()
 
-        try:
-            health = await client.get_health()
-        except CannotConnectError:
-            errors["base"] = "cannot_connect"
-        except InvalidAuthError:
-            errors["base"] = "invalid_auth"
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Failed to fetch MAC addresses during reconfigure")
-            errors["base"] = "unknown"
-
-        if errors:
+        if error_key:
             return self.async_show_form(
                 step_id="reconfigure_select_mac",
                 data_schema=vol.Schema({}),
-                errors=errors,
+                errors={"base": error_key},
             )
 
-        raw_macs: list[dict] = health.get("macAddresses", [])
-        mac_addresses = [
-            m for m in raw_macs if MAC_PATTERN.match(m.get("macAddress", ""))
-        ]
-
         if not mac_addresses:
-            errors["base"] = "no_mac_addresses"
             return self.async_show_form(
                 step_id="reconfigure_select_mac",
                 data_schema=vol.Schema({}),
-                errors=errors,
+                errors={"base": "no_mac_addresses"},
             )
 
         if len(mac_addresses) == 1:
@@ -396,31 +374,7 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        options = [
-            selector.SelectOptionDict(
-                value=mac.get("macAddress", ""),
-                label=(
-                    f"{mac.get('interfaceName', '')} "
-                    f"({mac.get('macAddress', '')} - {mac.get('ipAddress', '')})"
-                ),
-            )
-            for mac in mac_addresses
-        ]
-
-        return self.async_show_form(
-            step_id="reconfigure_select_mac",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MAC_ADDRESS): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=options,
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                }
-            ),
-            errors=errors,
-        )
+        return self._build_mac_dropdown_form("reconfigure_select_mac", mac_addresses)
 
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry) -> PcRemoteOptionsFlow:

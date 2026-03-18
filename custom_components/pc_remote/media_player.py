@@ -42,6 +42,7 @@ from .coordinator import PcRemoteCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 BIG_PICTURE_SOURCE = "Steam Big Picture"
+WAKE_RETRY_COUNT = 36  # 36 * 5s = 3 min
 
 _steam_logo_cache: tuple[bytes, str] | None = None
 
@@ -389,7 +390,7 @@ class PcRemoteSteamPlayer(
         self.async_write_ha_state()
         await self._send_wol_sustained(mac)
         self._start_fast_poll()
-        for _ in range(36):  # 36 * 5s = 3 min
+        for _ in range(WAKE_RETRY_COUNT):  # WAKE_RETRY_COUNT * 5s = 3 min
             await asyncio.sleep(5)
             try:
                 await self._client.get_health()
