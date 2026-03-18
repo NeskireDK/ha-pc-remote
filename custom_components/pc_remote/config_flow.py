@@ -63,6 +63,28 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         self._api_key: str | None = None
         self._machine_name: str | None = None
 
+    async def _test_connection(
+        self, host: str, port: int, api_key: str
+    ) -> tuple[dict | None, str | None]:
+        """Test connection and return (health_data, error_key). error_key is None on success."""
+        session = async_get_clientsession(self.hass)
+        client = PcRemoteClient(
+            host=host,
+            port=port,
+            api_key=api_key,
+            session=session,
+        )
+        try:
+            health = await client.get_health()
+            return health, None
+        except CannotConnectError:
+            return None, "cannot_connect"
+        except InvalidAuthError:
+            return None, "invalid_auth"
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Unexpected exception during connection test")
+            return None, "unknown"
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -70,23 +92,11 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            session = async_get_clientsession(self.hass)
-            client = PcRemoteClient(
-                host=user_input[CONF_HOST],
-                port=user_input[CONF_PORT],
-                api_key=user_input[CONF_API_KEY],
-                session=session,
+            health, error_key = await self._test_connection(
+                user_input[CONF_HOST], user_input[CONF_PORT], user_input[CONF_API_KEY]
             )
-
-            try:
-                health = await client.get_health()
-            except CannotConnectError:
-                errors["base"] = "cannot_connect"
-            except InvalidAuthError:
-                errors["base"] = "invalid_auth"
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Unexpected exception during config flow")
-                errors["base"] = "unknown"
+            if error_key:
+                errors["base"] = error_key
             else:
                 machine_name = health.get(
                     "machineName", f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
@@ -158,23 +168,11 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
             if self._discovered_port is None:
                 return self.async_abort(reason="unknown")
 
-            session = async_get_clientsession(self.hass)
-            client = PcRemoteClient(
-                host=self._discovered_host,
-                port=self._discovered_port,
-                api_key=user_input[CONF_API_KEY],
-                session=session,
+            health, error_key = await self._test_connection(
+                self._discovered_host, self._discovered_port, user_input[CONF_API_KEY]
             )
-
-            try:
-                health = await client.get_health()
-            except CannotConnectError:
-                errors["base"] = "cannot_connect"
-            except InvalidAuthError:
-                errors["base"] = "invalid_auth"
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Unexpected exception during config flow")
-                errors["base"] = "unknown"
+            if error_key:
+                errors["base"] = error_key
             else:
                 self._host = self._discovered_host
                 self._port = self._discovered_port
@@ -282,23 +280,11 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            session = async_get_clientsession(self.hass)
-            client = PcRemoteClient(
-                host=user_input[CONF_HOST],
-                port=user_input[CONF_PORT],
-                api_key=user_input[CONF_API_KEY],
-                session=session,
+            health, error_key = await self._test_connection(
+                user_input[CONF_HOST], user_input[CONF_PORT], user_input[CONF_API_KEY]
             )
-
-            try:
-                health = await client.get_health()
-            except CannotConnectError:
-                errors["base"] = "cannot_connect"
-            except InvalidAuthError:
-                errors["base"] = "invalid_auth"
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Unexpected exception during reconfigure")
-                errors["base"] = "unknown"
+            if error_key:
+                errors["base"] = error_key
             else:
                 self._host = user_input[CONF_HOST]
                 self._port = user_input[CONF_PORT]
