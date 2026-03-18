@@ -151,8 +151,10 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
                 data.steam_games = list(self._cached_steam_games)
             await self._restore_selections(data)
             return data
-        except Exception as err:  # noqa: BLE001
+        except (CannotConnectError, KeyError, TypeError, ValueError) as err:
             _LOGGER.debug("Aggregated state fetch failed, falling back to individual calls: %s", err)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Unexpected error fetching aggregated state, falling back: %s", err)
 
         # Fallback: individual calls
         try:
