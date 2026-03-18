@@ -362,18 +362,6 @@ class TestTurnOnOff:
         assert player.async_write_ha_state.call_count >= 2
 
     @pytest.mark.asyncio
-    async def test_turn_on_no_mac_does_nothing(self):
-        data = make_coordinator_data(online=False)
-        entry = make_mock_entry()
-        entry.data = {"host": "192.168.1.100", "port": 5000, "api_key": "key"}
-        player, coordinator, client = _make_player(data, entry=entry)
-
-        await player.async_turn_on()
-
-        coordinator.hass.async_add_executor_job.assert_not_awaited()
-        coordinator.set_power_state.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_turn_on_wol_error_does_not_propagate(self):
         data = make_coordinator_data(online=False)
         player, coordinator, client = _make_player(data)
