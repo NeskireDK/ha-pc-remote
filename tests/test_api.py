@@ -468,91 +468,23 @@ class TestApiKeyHeader:
     """Verify every public method sends X-Api-Key via the centralised _request helpers."""
 
     @pytest.mark.asyncio
-    async def test_get_health_sends_api_key(self):
-        resp = _make_response(200, {"success": True, "data": {"machineName": "PC"}})
+    @pytest.mark.parametrize("method,args,http_verb,resp_payload", [
+        ("get_health", [], "get", {"success": True, "data": {"machineName": "PC"}}),
+        ("get_system_state", [], "get", {"success": True, "data": {}}),
+        ("set_power_config", [30], "put", {}),
+        ("set_mode", ["Gaming"], "post", {}),
+        ("sleep", [], "post", {}),
+        ("set_audio_device", ["Speakers"], "post", {}),
+        ("steam_run", [570], "post", {"success": True, "data": None}),
+        ("steam_stop", [], "post", {}),
+        ("launch_app", ["chrome"], "post", {}),
+        ("solo_monitor", ["mon1"], "post", {}),
+    ])
+    async def test_api_key_header_is_sent(self, method, args, http_verb, resp_payload):
+        resp = _make_response(200, resp_payload)
         session = _make_session(resp)
         client = _make_client(session)
-        await client.get_health()
-        headers = session.get.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_get_system_state_sends_api_key(self):
-        resp = _make_response(200, {"success": True, "data": {}})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.get_system_state()
-        headers = session.get.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_set_power_config_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.set_power_config(30)
-        headers = session.put.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_set_mode_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.set_mode("Gaming")
-        headers = session.post.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_sleep_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.sleep()
-        headers = session.post.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_set_audio_device_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.set_audio_device("Speakers")
-        headers = session.post.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_steam_run_sends_api_key(self):
-        resp = _make_response(200, {"success": True, "data": None})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.steam_run(570)
-        headers = session.post.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_steam_stop_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.steam_stop()
-        headers = session.post.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_launch_app_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.launch_app("chrome")
-        headers = session.post.call_args[1]["headers"]
-        assert headers["X-Api-Key"] == "test-key"
-
-    @pytest.mark.asyncio
-    async def test_solo_monitor_sends_api_key(self):
-        resp = _make_response(200, {})
-        session = _make_session(resp)
-        client = _make_client(session)
-        await client.solo_monitor("mon1")
-        headers = session.post.call_args[1]["headers"]
+        await getattr(client, method)(*args)
+        session_method = getattr(session, http_verb)
+        headers = session_method.call_args[1]["headers"]
         assert headers["X-Api-Key"] == "test-key"
