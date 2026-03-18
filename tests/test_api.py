@@ -238,6 +238,51 @@ class TestMonitor:
         call_url = session.post.call_args[0][0]
         assert "/api/monitor/solo/" in call_url
 
+    @pytest.mark.asyncio
+    async def test_enable_monitor_posts_correct_url(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.enable_monitor("mon1")
+        assert "/api/monitor/enable/" in session.post.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_enable_monitor_401_raises_invalid_auth(self):
+        resp = _make_response(401)
+        client = _make_client(_make_session(resp))
+        with pytest.raises(InvalidAuthError):
+            await client.enable_monitor("mon1")
+
+    @pytest.mark.asyncio
+    async def test_disable_monitor_posts_correct_url(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.disable_monitor("mon1")
+        assert "/api/monitor/disable/" in session.post.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_disable_monitor_401_raises_invalid_auth(self):
+        resp = _make_response(401)
+        client = _make_client(_make_session(resp))
+        with pytest.raises(InvalidAuthError):
+            await client.disable_monitor("mon1")
+
+    @pytest.mark.asyncio
+    async def test_set_primary_monitor_posts_correct_url(self):
+        resp = _make_response(200, {})
+        session = _make_session(resp)
+        client = _make_client(session)
+        await client.set_primary_monitor("mon1")
+        assert "/api/monitor/primary/" in session.post.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_set_primary_monitor_401_raises_invalid_auth(self):
+        resp = _make_response(401)
+        client = _make_client(_make_session(resp))
+        with pytest.raises(InvalidAuthError):
+            await client.set_primary_monitor("mon1")
+
 
 # ---------------------------------------------------------------------------
 # Steam
@@ -299,6 +344,48 @@ class TestSteam:
         client = _make_client(_make_session(resp))
         with pytest.raises(InvalidAuthError):
             await client.steam_run(570)
+
+    @pytest.mark.asyncio
+    async def test_get_steam_bindings_returns_dict(self):
+        bindings = {"defaultPcMode": "couch", "gamePcModeBindings": {"570": "desktop"}}
+        resp = _make_response(200, {"success": True, "data": bindings})
+        client = _make_client(_make_session(resp))
+        result = await client.get_steam_bindings()
+        assert result["defaultPcMode"] == "couch"
+
+    @pytest.mark.asyncio
+    async def test_get_steam_bindings_returns_empty_dict_when_data_is_none(self):
+        resp = _make_response(200, {"success": True, "data": None})
+        client = _make_client(_make_session(resp))
+        result = await client.get_steam_bindings()
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_get_steam_bindings_401_raises_invalid_auth(self):
+        resp = _make_response(401)
+        client = _make_client(_make_session(resp))
+        with pytest.raises(InvalidAuthError):
+            await client.get_steam_bindings()
+
+
+# ---------------------------------------------------------------------------
+# trigger_update
+# ---------------------------------------------------------------------------
+
+class TestTriggerUpdate:
+    @pytest.mark.asyncio
+    async def test_trigger_update_returns_data(self):
+        resp = _make_response(200, {"success": True, "data": {"status": "ok"}})
+        client = _make_client(_make_session(resp))
+        result = await client.trigger_update()
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_trigger_update_401_raises_invalid_auth(self):
+        resp = _make_response(401)
+        client = _make_client(_make_session(resp))
+        with pytest.raises(InvalidAuthError):
+            await client.trigger_update()
 
 
 # ---------------------------------------------------------------------------
