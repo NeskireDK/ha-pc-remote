@@ -449,8 +449,8 @@ class TestMediaStop:
         data = make_coordinator_data(online=True, steam_running={"appId": 570, "name": "Dota 2"})
         player, coordinator, client = _make_player(data)
 
-        # Simulate stop issued 29 s ago — window is about to expire
-        old_ts = dt_util.utcnow() - timedelta(seconds=29)
+        # Simulate stop issued 25 s ago — window is approaching expiry but has margin
+        old_ts = dt_util.utcnow() - timedelta(seconds=25)
         player._stop_issued_at = old_ts
 
         # Coordinator still reports the game as running
