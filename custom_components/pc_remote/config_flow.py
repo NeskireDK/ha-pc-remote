@@ -190,19 +190,11 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_select_mac(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Select a network interface for Wake-on-LAN."""
-        errors: dict[str, str] = {}
+    async def _fetch_mac_addresses(self) -> tuple[list[dict], str | None]:
+        """Fetch and filter MAC addresses from the health endpoint.
 
-        if user_input is not None:
-            return self._create_entry(user_input[CONF_MAC_ADDRESS])
-
-        if self._host is None or self._port is None:
-            return self.async_abort(reason="unknown")
-
-        # Fetch MAC addresses from the health endpoint
+        Returns (mac_list, None) on success or ([], error_key) on failure.
+        """
         session = async_get_clientsession(self.hass)
         client = PcRemoteClient(
             host=self._host,
@@ -210,42 +202,27 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
             api_key=self._api_key,
             session=session,
         )
-
         try:
             health = await client.get_health()
         except CannotConnectError:
             _LOGGER.debug("Failed to fetch MAC addresses: service unreachable")
-            errors["base"] = "cannot_connect"
+            return [], "cannot_connect"
         except InvalidAuthError:
-            errors["base"] = "invalid_auth"
+            return [], "invalid_auth"
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Failed to fetch MAC addresses from health endpoint")
-            errors["base"] = "unknown"
-
-        if errors:
-            return self.async_show_form(
-                step_id="select_mac",
-                data_schema=vol.Schema({}),
-                errors=errors,
-            )
+            return [], "unknown"
 
         raw_macs: list[dict] = health.get("macAddresses", [])
         mac_addresses = [
             m for m in raw_macs if MAC_PATTERN.match(m.get("macAddress", ""))
         ]
+        return mac_addresses, None
 
-        if not mac_addresses:
-            errors["base"] = "no_mac_addresses"
-            return self.async_show_form(
-                step_id="select_mac",
-                data_schema=vol.Schema({}),
-                errors=errors,
-            )
-
-        if len(mac_addresses) == 1:
-            return self._create_entry(mac_addresses[0]["macAddress"])
-
-        # Multiple MACs — show dropdown
+    def _build_mac_dropdown_form(
+        self, step_id: str, mac_addresses: list[dict]
+    ) -> ConfigFlowResult:
+        """Build and return the MAC address dropdown form."""
         options = [
             selector.SelectOptionDict(
                 value=mac.get("macAddress", ""),
@@ -258,7 +235,7 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
         ]
 
         return self.async_show_form(
-            step_id="select_mac",
+            step_id=step_id,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_MAC_ADDRESS): selector.SelectSelector(
@@ -269,8 +246,39 @@ class PcRemoteConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
-            errors=errors,
+            errors={},
         )
+
+    async def async_step_select_mac(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select a network interface for Wake-on-LAN."""
+        if user_input is not None:
+            return self._create_entry(user_input[CONF_MAC_ADDRESS])
+
+        if self._host is None or self._port is None:
+            return self.async_abort(reason="unknown")
+
+        mac_addresses, error_key = await self._fetch_mac_addresses()
+
+        if error_key:
+            return self.async_show_form(
+                step_id="select_mac",
+                data_schema=vol.Schema({}),
+                errors={"base": error_key},
+            )
+
+        if not mac_addresses:
+            return self.async_show_form(
+                step_id="select_mac",
+                data_schema=vol.Schema({}),
+                errors={"base": "no_mac_addresses"},
+            )
+
+        if len(mac_addresses) == 1:
+            return self._create_entry(mac_addresses[0]["macAddress"])
+
+        return self._build_mac_dropdown_form("select_mac", mac_addresses)
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
