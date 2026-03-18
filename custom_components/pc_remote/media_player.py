@@ -92,6 +92,7 @@ class PcRemoteSteamPlayer(
         self._stop_issued_at: datetime | None = None
         self._last_playing: dict | None = None
         self._fast_poll_unsub: Callable | None = None
+        self._normal_poll_interval = coordinator.update_interval
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -317,6 +318,7 @@ class PcRemoteSteamPlayer(
         """Switch coordinator to fast polling and schedule restoration."""
         if self._fast_poll_unsub is not None:
             self._fast_poll_unsub()
+        self._normal_poll_interval = self.coordinator.update_interval
         self.coordinator.update_interval = timedelta(seconds=FAST_POLL_INTERVAL)
 
         def _restore_callback(_now: Any) -> None:
@@ -328,9 +330,7 @@ class PcRemoteSteamPlayer(
 
     def _restore_normal_poll(self) -> None:
         """Restore the coordinator to its normal polling interval."""
-        from .const import DEFAULT_SCAN_INTERVAL
-
-        self.coordinator.update_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+        self.coordinator.update_interval = self._normal_poll_interval
         if self._fast_poll_unsub is not None:
             self._fast_poll_unsub()
             self._fast_poll_unsub = None
