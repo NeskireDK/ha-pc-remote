@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
 import time
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from wakeonlan import send_magic_packet
 
 from .api import CannotConnectError, InvalidAuthError, PcRemoteClient
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_MAC_ADDRESS, DEFAULT_SCAN_INTERVAL, DOMAIN, FAST_POLL_DURATION, FAST_POLL_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +28,8 @@ STEAM_GAMES_STORAGE_VERSION = 1
 
 
 SELECTIONS_STORAGE_VERSION = 1
+
+_WAKE_RETRY_COUNT = 36  # 36 * 5s = 3 min
 
 
 @dataclass
@@ -56,7 +61,7 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
         self,
         hass: HomeAssistant,
         client: PcRemoteClient,
-        entry_id: str,
+        entry: ConfigEntry,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
     ) -> None:
         """Initialize the coordinator."""
@@ -67,19 +72,89 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
+        self.entry = entry
+        self._scan_interval = scan_interval
+        self._fast_polling = False
+        self._fast_poll_start: float = 0
+        self._wake_task: asyncio.Task[bool] | None = None
         self._power_override: tuple[bool, float] | None = None
         self._steam_games_store: Store = Store(
             hass,
             STEAM_GAMES_STORAGE_VERSION,
-            f"{DOMAIN}.{entry_id}.steam_games",
+            f"{DOMAIN}.{entry.entry_id}.steam_games",
         )
         self._cached_steam_games: list[dict] = []
         self._selections_store: Store = Store(
             hass,
             SELECTIONS_STORAGE_VERSION,
-            f"{DOMAIN}.{entry_id}.selections",
+            f"{DOMAIN}.{entry.entry_id}.selections",
         )
         self._prev_audio_device: str | None = None
+
+    # ── Wake-on-LAN ───────────────────────────────────────────────────
+
+    async def async_ensure_online(self) -> bool:
+        """Wake the PC if offline. Returns True if online, False if wake failed.
+
+        Concurrent callers share a single wake task to avoid thundering herd.
+        """
+        if self.data.online:
+            return True
+        return await self.async_wake_and_wait()
+
+    async def async_wake_and_wait(self) -> bool:
+        """Send sustained WoL and wait for service to come online (max 3 min).
+
+        Concurrent callers share a single wake task.
+        """
+        if self._wake_task and not self._wake_task.done():
+            return await self._wake_task
+        self._wake_task = asyncio.ensure_future(self._do_wake())
+        return await self._wake_task
+
+    async def _do_wake(self) -> bool:
+        """Internal wake implementation."""
+        mac = self.entry.data.get(CONF_MAC_ADDRESS)
+        if not mac:
+            _LOGGER.error("MAC address not configured, cannot send WoL packet")
+            return False
+        self.set_power_state(True)
+        await self._send_wol_sustained(mac)
+        self._start_fast_poll()
+        for _ in range(_WAKE_RETRY_COUNT):
+            await asyncio.sleep(5)
+            try:
+                await self.client.get_health()
+                return True
+            except CannotConnectError:
+                continue
+        self._restore_normal_poll()
+        _LOGGER.warning("PC did not come online within timeout")
+        return False
+
+    async def _send_wol_sustained(self, mac: str, duration: int = 20, interval: int = 1) -> None:
+        """Send WoL magic packets repeatedly for `duration` seconds."""
+        end_time = time.monotonic() + duration
+        while time.monotonic() < end_time:
+            try:
+                await self.hass.async_add_executor_job(send_magic_packet, mac)
+            except (ValueError, OSError) as err:
+                _LOGGER.error("Failed to send WoL packet: %s", err)
+                return
+            await asyncio.sleep(interval)
+
+    def _start_fast_poll(self) -> None:
+        """Switch to fast polling temporarily."""
+        self._fast_polling = True
+        self._fast_poll_start = time.monotonic()
+        self.update_interval = timedelta(seconds=FAST_POLL_INTERVAL)
+
+    def _restore_normal_poll(self) -> None:
+        """Restore normal polling interval."""
+        self._fast_polling = False
+        self.update_interval = timedelta(seconds=self._scan_interval)
+
+    # ── Storage ────────────────────────────────────────────────────────
 
     async def async_load_steam_cache(self) -> None:
         """Load persisted Steam game list from storage. Call before first refresh."""
@@ -136,9 +211,16 @@ class PcRemoteCoordinator(DataUpdateCoordinator[PcRemoteData]):
             raise UpdateFailed(f"Unexpected error: {err}") from err
 
         if not data.online:
+            # Expire fast polling if the duration has elapsed (avoids 1s polling forever)
+            if self._fast_polling and time.monotonic() - self._fast_poll_start > FAST_POLL_DURATION:
+                self._restore_normal_poll()
             # Serve the last known game list so the source_list remains populated
             data.steam_games = list(self._cached_steam_games)
             return data
+
+        # Restore normal polling if we were fast-polling and PC came online
+        if self._fast_polling:
+            self._restore_normal_poll()
 
         # Try aggregated state endpoint first
         try:
