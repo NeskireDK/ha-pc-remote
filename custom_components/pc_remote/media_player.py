@@ -363,6 +363,7 @@ class PcRemoteSteamPlayer(PcRemoteEntityBase, MediaPlayerEntity):
         media_content_id: str | None = None,
     ) -> BrowseMedia:
         """Return browsable Steam games."""
+        await self.coordinator.async_request_refresh()
         games = self.coordinator.data.steam_games
         children = [
             BrowseMedia(
