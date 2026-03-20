@@ -14,16 +14,17 @@ from custom_components.pc_remote.coordinator import (
     PcRemoteCoordinator,
     PcRemoteData,
 )
-from tests.conftest import make_mock_client
+from tests.conftest import make_mock_client, make_mock_entry
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_coordinator(hass, client=None) -> PcRemoteCoordinator:
+def _make_coordinator(hass, client=None, entry=None) -> PcRemoteCoordinator:
     client = client or make_mock_client()
-    return PcRemoteCoordinator(hass, client, entry_id="entry1")
+    entry = entry or make_mock_entry()
+    return PcRemoteCoordinator(hass, client, entry)
 
 
 def _full_system_state() -> dict:
@@ -422,3 +423,108 @@ class TestRestoreSelections:
         data = await coord._async_update_data()
 
         assert data.current_mode == "Gaming"
+
+
+# ---------------------------------------------------------------------------
+# Wake-on-LAN
+# ---------------------------------------------------------------------------
+
+class TestWakeOnLan:
+    @pytest.mark.asyncio
+    async def test_ensure_online_returns_true_when_already_online(self, hass):
+        client = make_mock_client()
+        client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
+        client.get_system_state.return_value = _full_system_state()
+
+        coord = _make_coordinator(hass, client)
+        await coord._async_update_data()  # set online=True
+
+        result = await coord.async_ensure_online()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_ensure_online_wakes_when_offline(self, hass):
+        client = make_mock_client()
+        client.get_health.side_effect = CannotConnectError("refused")
+
+        coord = _make_coordinator(hass, client)
+        await coord._async_update_data()  # set online=False
+
+        # Now make health succeed on wake polling
+        client.get_health.side_effect = None
+        client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
+
+        result = await coord.async_ensure_online()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_wake_and_wait_no_mac_returns_false(self, hass):
+        entry = make_mock_entry()
+        entry.data = {"host": "h", "port": 5000, "api_key": "k"}
+        coord = _make_coordinator(hass, entry=entry)
+
+        result = await coord.async_wake_and_wait()
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_wake_and_wait_timeout_returns_false(self, hass):
+        client = make_mock_client()
+        client.get_health.side_effect = CannotConnectError("still down")
+
+        coord = _make_coordinator(hass, client)
+
+        result = await coord.async_wake_and_wait()
+        assert result is False
+        assert not coord._fast_polling  # restored after timeout
+
+    @pytest.mark.asyncio
+    async def test_wake_and_wait_sets_fast_poll(self, hass):
+        client = make_mock_client()
+        # Succeed on first health poll
+        coord = _make_coordinator(hass, client)
+
+        await coord.async_wake_and_wait()
+
+        assert coord._fast_polling is True
+        assert coord.update_interval == timedelta(seconds=1)
+
+    @pytest.mark.asyncio
+    async def test_fast_poll_restored_on_online(self, hass):
+        client = make_mock_client()
+        client.get_health.return_value = {"machineName": "PC", "version": "1.0"}
+        client.get_system_state.return_value = _full_system_state()
+
+        coord = _make_coordinator(hass, client)
+        coord._start_fast_poll()
+        assert coord._fast_polling is True
+
+        await coord._async_update_data()
+        assert coord._fast_polling is False
+        assert coord.update_interval == timedelta(seconds=30)
+
+    @pytest.mark.asyncio
+    async def test_fast_poll_expires_when_pc_stays_offline(self, hass):
+        client = make_mock_client()
+        client.get_health.side_effect = CannotConnectError("still down")
+
+        coord = _make_coordinator(hass, client)
+        coord._start_fast_poll()
+        # Simulate time past FAST_POLL_DURATION
+        coord._fast_poll_start = time.monotonic() - 200
+
+        await coord._async_update_data()
+        assert coord._fast_polling is False
+        assert coord.update_interval == timedelta(seconds=30)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_wake_shares_task(self, hass):
+        client = make_mock_client()
+        coord = _make_coordinator(hass, client)
+
+        # Both calls should return the same result
+        task1 = asyncio.ensure_future(coord.async_wake_and_wait())
+        task2 = asyncio.ensure_future(coord.async_wake_and_wait())
+        r1, r2 = await asyncio.gather(task1, task2)
+
+        assert r1 is True
+        assert r2 is True

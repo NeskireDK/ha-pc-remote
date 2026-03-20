@@ -7,13 +7,12 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import PcRemoteClient
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN
 from .coordinator import PcRemoteCoordinator
+from .entity_base import PcRemoteEntityBase
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,9 +33,7 @@ async def async_setup_entry(
     ])
 
 
-class PcRemoteSelectBase(
-    CoordinatorEntity[PcRemoteCoordinator], SelectEntity
-):
+class PcRemoteSelectBase(PcRemoteEntityBase, SelectEntity):
     """Base class for PC Remote select entities."""
 
     _attr_has_entity_name = True
@@ -49,24 +46,9 @@ class PcRemoteSelectBase(
         unique_id_suffix: str,
     ) -> None:
         """Initialize the select entity."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self._client = client
-        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{unique_id_suffix}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
-
-    @property
-    def available(self) -> bool:
-        """Available only when the PC is online."""
-        return super().available and self.coordinator.data.online
 
 
 class PcRemoteAudioOutputSelect(PcRemoteSelectBase):
@@ -95,7 +77,9 @@ class PcRemoteAudioOutputSelect(PcRemoteSelectBase):
         return self.coordinator.data.current_audio_device
 
     async def async_select_option(self, option: str) -> None:
-        """Set the audio output device."""
+        """Set the audio output device, waking the PC first if needed."""
+        if not await self.coordinator.async_ensure_online():
+            return
         await self._client.set_audio_device(option)
         self.coordinator.data.current_audio_device = option
         self.async_write_ha_state()
@@ -140,7 +124,9 @@ class PcRemoteMonitorSoloSelect(PcRemoteSelectBase):
         return None
 
     async def async_select_option(self, option: str) -> None:
-        """Solo the selected monitor."""
+        """Solo the selected monitor, waking the PC first if needed."""
+        if not await self.coordinator.async_ensure_online():
+            return
         monitor_id = self._monitor_id_for_name(option)
         if monitor_id is None:
             _LOGGER.warning("Monitor '%s' not found in known monitors", option)
@@ -175,7 +161,9 @@ class PcRemoteModeSelect(PcRemoteSelectBase):
         return self.coordinator.data.current_mode
 
     async def async_select_option(self, option: str) -> None:
-        """Apply the selected PC mode."""
+        """Apply the selected PC mode, waking the PC first if needed."""
+        if not await self.coordinator.async_ensure_online():
+            return
         await self._client.set_mode(option)
         self.coordinator.data.current_mode = option
         await self.coordinator.persist_selection("mode", option)

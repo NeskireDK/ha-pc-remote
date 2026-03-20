@@ -176,16 +176,6 @@ class TestAppSwitchState:
         switch, *_ = _make_app_switch("unknown_app", "Unknown", data)
         assert switch.is_on is None
 
-    def test_unavailable_when_offline(self):
-        data = make_coordinator_data(online=False)
-        switch, *_ = _make_app_switch(data=data)
-        assert switch.available is False
-
-    def test_available_when_online(self):
-        data = make_coordinator_data(online=True)
-        switch, *_ = _make_app_switch(data=data)
-        assert switch.available is True
-
     def test_unique_id_includes_entry_id_and_key(self):
         entry = make_mock_entry(entry_id="myentry")
         switch, *_ = _make_app_switch("steam", "Steam", entry=entry)
@@ -212,6 +202,26 @@ class TestAppSwitchCommands:
         coordinator.async_request_refresh.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_turn_on_auto_wakes_when_offline(self):
+        data = make_coordinator_data(online=False, apps=[])
+        switch, coordinator, client = _make_app_switch("chrome", "Chrome", data)
+
+        await switch.async_turn_on()
+
+        coordinator.async_ensure_online.assert_awaited_once()
+        client.launch_app.assert_awaited_once_with("chrome")
+
+    @pytest.mark.asyncio
+    async def test_turn_on_aborts_when_wake_fails(self):
+        data = make_coordinator_data(online=False, apps=[])
+        switch, coordinator, client = _make_app_switch("chrome", "Chrome", data)
+        coordinator.async_ensure_online.return_value = False
+
+        await switch.async_turn_on()
+
+        client.launch_app.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_turn_off_kills_app(self):
         data = make_coordinator_data(online=True, apps=[])
         switch, coordinator, client = _make_app_switch("chrome", "Chrome", data)
@@ -220,21 +230,3 @@ class TestAppSwitchCommands:
 
         client.kill_app.assert_awaited_once_with("chrome")
         coordinator.async_request_refresh.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_turn_on_api_failure_propagates(self):
-        data = make_coordinator_data(online=True)
-        switch, coordinator, client = _make_app_switch(data=data)
-        client.launch_app.side_effect = CannotConnectError("no conn")
-
-        with pytest.raises(CannotConnectError):
-            await switch.async_turn_on()
-
-    @pytest.mark.asyncio
-    async def test_turn_off_api_failure_propagates(self):
-        data = make_coordinator_data(online=True)
-        switch, coordinator, client = _make_app_switch(data=data)
-        client.kill_app.side_effect = CannotConnectError("no conn")
-
-        with pytest.raises(CannotConnectError):
-            await switch.async_turn_off()

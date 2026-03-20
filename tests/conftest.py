@@ -95,6 +95,8 @@ def make_mock_coordinator(data: PcRemoteData | None = None) -> MagicMock:
     coordinator.hass.async_create_task = MagicMock()
     coordinator.async_request_refresh = AsyncMock()
     coordinator.persist_selection = AsyncMock()
+    coordinator.async_ensure_online = AsyncMock(return_value=True)
+    coordinator.async_wake_and_wait = AsyncMock(return_value=True)
     coordinator.available = True
     return coordinator
 

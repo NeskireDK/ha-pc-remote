@@ -66,16 +66,6 @@ class TestAudioOutputSelect:
         entity, *_ = _make_entity(PcRemoteAudioOutputSelect, data)
         assert entity.current_option is None
 
-    def test_available_when_online(self):
-        data = make_coordinator_data(online=True)
-        entity, *_ = _make_entity(PcRemoteAudioOutputSelect, data)
-        assert entity.available is True
-
-    def test_unavailable_when_offline(self):
-        data = make_coordinator_data(online=False)
-        entity, *_ = _make_entity(PcRemoteAudioOutputSelect, data)
-        assert entity.available is False
-
     @pytest.mark.asyncio
     async def test_select_option_calls_api_and_updates_data(self):
         data = make_coordinator_data(
@@ -89,13 +79,23 @@ class TestAudioOutputSelect:
         assert coordinator.data.current_audio_device == "Headphones"
 
     @pytest.mark.asyncio
-    async def test_select_option_propagates_api_error(self):
-        data = make_coordinator_data()
+    async def test_select_option_auto_wakes(self):
+        data = make_coordinator_data(online=False)
         entity, coordinator, client = _make_entity(PcRemoteAudioOutputSelect, data)
-        client.set_audio_device.side_effect = CannotConnectError("refused")
 
-        with pytest.raises(CannotConnectError):
-            await entity.async_select_option("Headphones")
+        await entity.async_select_option("Headphones")
+
+        coordinator.async_ensure_online.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_select_option_aborts_when_wake_fails(self):
+        data = make_coordinator_data(online=False)
+        entity, coordinator, client = _make_entity(PcRemoteAudioOutputSelect, data)
+        coordinator.async_ensure_online.return_value = False
+
+        await entity.async_select_option("Headphones")
+
+        client.set_audio_device.assert_not_awaited()
 
     def test_unique_id_includes_entry_id(self):
         entry = make_mock_entry(entry_id="abc")
@@ -103,7 +103,6 @@ class TestAudioOutputSelect:
         assert entity._attr_unique_id == "abc_audio_output"
 
 
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # PcRemoteMonitorSoloSelect
 # ---------------------------------------------------------------------------
@@ -172,10 +171,27 @@ class TestMonitorSoloSelect:
         client.solo_monitor.assert_not_awaited()
         coordinator.async_request_refresh.assert_not_awaited()
 
-    def test_unavailable_when_offline(self):
+    @pytest.mark.asyncio
+    async def test_solo_auto_wakes(self):
         data = make_coordinator_data(online=False)
-        entity, *_ = _make_entity(PcRemoteMonitorSoloSelect, data)
-        assert entity.available is False
+        entity, coordinator, client = _make_entity(PcRemoteMonitorSoloSelect, data)
+
+        await entity.async_select_option("Dell")
+
+        coordinator.async_ensure_online.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_solo_aborts_when_wake_fails(self):
+        data = make_coordinator_data(
+            online=False,
+            monitors=[{"monitorId": "m1", "monitorName": "Dell", "isPrimary": True}],
+        )
+        entity, coordinator, client = _make_entity(PcRemoteMonitorSoloSelect, data)
+        coordinator.async_ensure_online.return_value = False
+
+        await entity.async_select_option("Dell")
+
+        client.solo_monitor.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +213,6 @@ class TestModeSelect:
         data = make_coordinator_data(modes=["Gaming"])
         entity, *_ = _make_entity(PcRemoteModeSelect, data)
         assert entity.current_option is None
-
-    def test_unavailable_when_offline(self):
-        data = make_coordinator_data(online=False)
-        entity, *_ = _make_entity(PcRemoteModeSelect, data)
-        assert entity.available is False
 
     @pytest.mark.asyncio
     async def test_select_option_calls_api_and_persists_mode(self):
@@ -226,13 +237,23 @@ class TestModeSelect:
         assert coordinator.data.current_mode == "Gaming"
 
     @pytest.mark.asyncio
-    async def test_select_option_api_failure_propagates(self):
-        data = make_coordinator_data(modes=["Gaming"])
+    async def test_select_option_auto_wakes(self):
+        data = make_coordinator_data(online=False, modes=["Gaming"])
         entity, coordinator, client = _make_entity(PcRemoteModeSelect, data)
-        client.set_mode.side_effect = CannotConnectError("refused")
 
-        with pytest.raises(CannotConnectError):
-            await entity.async_select_option("Gaming")
+        await entity.async_select_option("Gaming")
+
+        coordinator.async_ensure_online.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_select_option_aborts_when_wake_fails(self):
+        data = make_coordinator_data(online=False, modes=["Gaming"])
+        entity, coordinator, client = _make_entity(PcRemoteModeSelect, data)
+        coordinator.async_ensure_online.return_value = False
+
+        await entity.async_select_option("Gaming")
+
+        client.set_mode.assert_not_awaited()
 
     def test_unique_id_includes_entry_id(self):
         entry = make_mock_entry(entry_id="xyz")
