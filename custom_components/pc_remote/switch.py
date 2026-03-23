@@ -5,15 +5,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from wakeonlan import send_magic_packet
-
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import CannotConnectError, PcRemoteClient
-from .const import CONF_MAC_ADDRESS, DOMAIN
+from .const import DOMAIN
 from .coordinator import PcRemoteCoordinator
 from .entity_base import PcRemoteEntityBase
 
@@ -67,7 +65,6 @@ class PcRemotePowerSwitch(PcRemoteEntityBase, SwitchEntity):
         """Initialize the power switch."""
         super().__init__(coordinator, entry)
         self._client = client
-        self._mac: str = entry.data.get(CONF_MAC_ADDRESS, "")
         self._attr_unique_id = f"{entry.entry_id}_power"
 
     @property
@@ -81,17 +78,8 @@ class PcRemotePowerSwitch(PcRemoteEntityBase, SwitchEntity):
         return self.coordinator.data.online
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Wake the PC via Wake-on-LAN."""
-        if not self._mac:
-            _LOGGER.error("MAC address not configured, cannot send WoL packet")
-            return
-        try:
-            await self.hass.async_add_executor_job(send_magic_packet, self._mac)
-        except (ValueError, OSError) as err:
-            _LOGGER.error("Failed to send WoL packet: %s", err)
-            return
-        self.coordinator.set_power_state(True)
-        self.async_write_ha_state()
+        """Wake the PC via sustained Wake-on-LAN."""
+        await self.coordinator.async_wake_and_wait()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Put the PC to sleep."""

@@ -77,51 +77,22 @@ class TestPowerSwitchState:
 
 class TestPowerSwitchTurnOn:
     @pytest.mark.asyncio
-    async def test_turn_on_sends_wol_and_sets_power_state(self):
-        entry = make_mock_entry(mac_address="AA:BB:CC:DD:EE:FF")
+    async def test_turn_on_delegates_to_async_wake_and_wait(self):
         data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
+        switch, coordinator, client = _make_power_switch(data=data)
 
         await switch.async_turn_on()
 
-        coordinator.hass.async_add_executor_job.assert_awaited_once()
-        coordinator.set_power_state.assert_called_once_with(True)
+        coordinator.async_wake_and_wait.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_turn_on_no_mac_does_nothing(self):
-        entry = make_mock_entry(mac_address="")
-        # Override data dict to clear mac
-        entry.data = {"host": "host", "port": 5000, "api_key": "k", "mac_address": ""}
+    async def test_turn_on_does_not_call_send_magic_packet_directly(self):
         data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
+        switch, coordinator, client = _make_power_switch(data=data)
 
         await switch.async_turn_on()
 
         coordinator.hass.async_add_executor_job.assert_not_awaited()
-        coordinator.set_power_state.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_turn_on_wol_os_error_does_not_propagate(self):
-        entry = make_mock_entry(mac_address="AA:BB:CC:DD:EE:FF")
-        data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
-        coordinator.hass.async_add_executor_job.side_effect = OSError("network error")
-
-        # Should not raise
-        await switch.async_turn_on()
-
-        coordinator.set_power_state.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_turn_on_wol_value_error_does_not_propagate(self):
-        entry = make_mock_entry(mac_address="INVALID")
-        data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
-        coordinator.hass.async_add_executor_job.side_effect = ValueError("bad mac")
-
-        await switch.async_turn_on()
-
-        coordinator.set_power_state.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
