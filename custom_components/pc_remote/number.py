@@ -5,13 +5,12 @@ from __future__ import annotations
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import PcRemoteClient
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN
 from .coordinator import PcRemoteCoordinator
+from .entity_base import PcRemoteEntityBase
 
 
 async def async_setup_entry(
@@ -29,9 +28,7 @@ async def async_setup_entry(
     ])
 
 
-class PcRemoteVolumeNumber(
-    CoordinatorEntity[PcRemoteCoordinator], NumberEntity
-):
+class PcRemoteVolumeNumber(PcRemoteEntityBase, NumberEntity):
     """Number entity for controlling the system volume."""
 
     _attr_has_entity_name = True
@@ -48,19 +45,9 @@ class PcRemoteVolumeNumber(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the number entity."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self._client = client
-        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_volume"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
 
     @property
     def available(self) -> bool:
@@ -79,9 +66,7 @@ class PcRemoteVolumeNumber(
         self.async_write_ha_state()
 
 
-class PcRemoteAutoSleepNumber(
-    CoordinatorEntity[PcRemoteCoordinator], NumberEntity
-):
+class PcRemoteAutoSleepNumber(PcRemoteEntityBase, NumberEntity):
     """Number entity for configuring auto-sleep timeout."""
 
     _attr_has_entity_name = True
@@ -99,19 +84,9 @@ class PcRemoteAutoSleepNumber(
         entry: ConfigEntry,
     ) -> None:
         """Initialize the number entity."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self._client = client
-        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_auto_sleep"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info from latest coordinator data."""
-        return build_device_info(
-            self._entry,
-            machine_name=self.coordinator.data.machine_name,
-            sw_version=self.coordinator.data.service_version,
-        )
 
     @property
     def available(self) -> bool:

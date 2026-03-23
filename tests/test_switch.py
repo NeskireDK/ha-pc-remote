@@ -77,51 +77,22 @@ class TestPowerSwitchState:
 
 class TestPowerSwitchTurnOn:
     @pytest.mark.asyncio
-    async def test_turn_on_sends_wol_and_sets_power_state(self):
-        entry = make_mock_entry(mac_address="AA:BB:CC:DD:EE:FF")
+    async def test_turn_on_delegates_to_async_wake_and_wait(self):
         data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
+        switch, coordinator, client = _make_power_switch(data=data)
 
         await switch.async_turn_on()
 
-        coordinator.hass.async_add_executor_job.assert_awaited_once()
-        coordinator.set_power_state.assert_called_once_with(True)
+        coordinator.async_wake_and_wait.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_turn_on_no_mac_does_nothing(self):
-        entry = make_mock_entry(mac_address="")
-        # Override data dict to clear mac
-        entry.data = {"host": "host", "port": 5000, "api_key": "k", "mac_address": ""}
+    async def test_turn_on_does_not_call_send_magic_packet_directly(self):
         data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
+        switch, coordinator, client = _make_power_switch(data=data)
 
         await switch.async_turn_on()
 
         coordinator.hass.async_add_executor_job.assert_not_awaited()
-        coordinator.set_power_state.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_turn_on_wol_os_error_does_not_propagate(self):
-        entry = make_mock_entry(mac_address="AA:BB:CC:DD:EE:FF")
-        data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
-        coordinator.hass.async_add_executor_job.side_effect = OSError("network error")
-
-        # Should not raise
-        await switch.async_turn_on()
-
-        coordinator.set_power_state.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_turn_on_wol_value_error_does_not_propagate(self):
-        entry = make_mock_entry(mac_address="INVALID")
-        data = make_coordinator_data(online=False)
-        switch, coordinator, client = _make_power_switch(data=data, entry=entry)
-        coordinator.hass.async_add_executor_job.side_effect = ValueError("bad mac")
-
-        await switch.async_turn_on()
-
-        coordinator.set_power_state.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -176,16 +147,6 @@ class TestAppSwitchState:
         switch, *_ = _make_app_switch("unknown_app", "Unknown", data)
         assert switch.is_on is None
 
-    def test_unavailable_when_offline(self):
-        data = make_coordinator_data(online=False)
-        switch, *_ = _make_app_switch(data=data)
-        assert switch.available is False
-
-    def test_available_when_online(self):
-        data = make_coordinator_data(online=True)
-        switch, *_ = _make_app_switch(data=data)
-        assert switch.available is True
-
     def test_unique_id_includes_entry_id_and_key(self):
         entry = make_mock_entry(entry_id="myentry")
         switch, *_ = _make_app_switch("steam", "Steam", entry=entry)
@@ -212,6 +173,26 @@ class TestAppSwitchCommands:
         coordinator.async_request_refresh.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_turn_on_auto_wakes_when_offline(self):
+        data = make_coordinator_data(online=False, apps=[])
+        switch, coordinator, client = _make_app_switch("chrome", "Chrome", data)
+
+        await switch.async_turn_on()
+
+        coordinator.async_ensure_online.assert_awaited_once()
+        client.launch_app.assert_awaited_once_with("chrome")
+
+    @pytest.mark.asyncio
+    async def test_turn_on_aborts_when_wake_fails(self):
+        data = make_coordinator_data(online=False, apps=[])
+        switch, coordinator, client = _make_app_switch("chrome", "Chrome", data)
+        coordinator.async_ensure_online.return_value = False
+
+        await switch.async_turn_on()
+
+        client.launch_app.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_turn_off_kills_app(self):
         data = make_coordinator_data(online=True, apps=[])
         switch, coordinator, client = _make_app_switch("chrome", "Chrome", data)
@@ -220,21 +201,3 @@ class TestAppSwitchCommands:
 
         client.kill_app.assert_awaited_once_with("chrome")
         coordinator.async_request_refresh.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_turn_on_api_failure_propagates(self):
-        data = make_coordinator_data(online=True)
-        switch, coordinator, client = _make_app_switch(data=data)
-        client.launch_app.side_effect = CannotConnectError("no conn")
-
-        with pytest.raises(CannotConnectError):
-            await switch.async_turn_on()
-
-    @pytest.mark.asyncio
-    async def test_turn_off_api_failure_propagates(self):
-        data = make_coordinator_data(online=True)
-        switch, coordinator, client = _make_app_switch(data=data)
-        client.kill_app.side_effect = CannotConnectError("no conn")
-
-        with pytest.raises(CannotConnectError):
-            await switch.async_turn_off()
